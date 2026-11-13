@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CFD 自動下單</title>
+<style>
+  :root{--bg:#12161c;--panel:#1a2029;--panel2:#212834;--line:#2c3543;--ink:#e6e9ee;--dim:#8b95a5;
+    --up:#e5484d;--down:#2fb36b;--warn:#e0a83a;--gold:#d4a73a;--blue:#7fb3ff;color-scheme:dark}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}
+  body{padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+  header{display:flex;align-items:center;gap:10px;padding:14px 14px 8px;flex-wrap:wrap}
+  header h1{font-size:19px;margin:0;font-weight:650}
+  main{padding:4px 12px 40px;max-width:1100px;margin:0 auto}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+  .panel h2{font-size:15px;margin:0 0 10px;font-weight:600}
+  .badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12.5px;border:1px solid var(--gold);color:var(--gold)}
+  .badge.solid{background:var(--gold);color:#1a1405}
+  .badge.ok{border-color:var(--down);color:var(--down)}
+  .badge.bad{border-color:var(--up);color:var(--up)}
+  .badge.dim{border-color:var(--line);color:var(--dim)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .k{font-size:12px;color:var(--dim)} .v{font-size:15px;font-variant-numeric:tabular-nums}
+  .up{color:var(--up)} .down{color:var(--down)} .dimc{color:var(--dim)} .gold{color:var(--gold)} .warn{color:var(--warn)}
+  table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:13px}
+  th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+  th{color:var(--dim);font-weight:500} td.l,th.l{text-align:left}
+  .scroll{overflow-x:auto}
+  button{font:inherit;cursor:pointer;border-radius:7px;padding:7px 13px}
+  .sec{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
+  .kill{background:none;color:var(--up);border:1px solid var(--up);font-weight:650}
+  .kill.on{background:var(--up);color:#fff}
+  .inst{border:1px solid var(--line);border-radius:9px;padding:12px;margin-bottom:10px;background:var(--panel2)}
+  .inst .t{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .inst .t b{font-size:16px;color:var(--gold)}
+  .ev{font-size:13px;padding:5px 0;border-bottom:1px solid var(--line);white-space:pre-wrap}
+  .ev.error{color:var(--up)} .ev.warn{color:var(--warn)} .ev.trade{color:var(--gold)}
+</style>
+</head>
+<body>
+<header>
+  <h1>CFD 自動下單</h1>
+  <span id="mode" class="badge dim">—</span>
+  <span id="conn" class="badge dim">EA —</span>
+  <span style="flex:1"></span>
+  <button id="killbtn" class="kill">緊急停止</button>
+</header>
+<main>
+  <div class="panel"><div class="grid" id="acct"></div></div>
+  <div class="panel"><h2>策略</h2><div id="insts"></div></div>
+  <div class="panel"><h2>事件</h2><div id="events"></div></div>
+  <div class="panel"><h2>最近成交（券商）</h2><div class="scroll"><table id="deals"></table></div></div>
+  <div class="panel"><h2>最近送出的動作</h2><div class="scroll"><table id="acts"></table></div></div>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const fmt = (v, d = 2) => (v === null || v === undefined || v === "") ? "–" : Number(v).toLocaleString("zh-TW", {minimumFractionDigits: d, maximumFractionDigits: d});
+const sgn = (v, d = 2) => `<span class="${v > 0 ? "up" : v < 0 ? "down" : ""}">${v > 0 ? "+" : ""}${fmt(v, d)}</span>`;
+const tstr = s => s ? new Date(s * 1000).toLocaleString("zh-TW", {hour12: false, month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"}) : "–";
+async function api(p, body) {
+  const r = await fetch(p, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)} : {});
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+let KILL = false;
+$("#killbtn").onclick = async () => {
+  if (!KILL) { if (!confirm("緊急停止：平掉所有策略持倉、撤銷所有掛單，並停止下單。確定？")) return; }
+  else if (!confirm("解除緊急停止，恢復自動下單？")) return;
+  await api("/api/kill", {on: !KILL}); load();
+};
+async function load() {
+  let s;
+  try { s = await api("/api/status"); } catch (e) { $("#conn").className = "badge bad"; $("#conn").textContent = "服務連不上"; return; }
+  const a = s.account || {};
+  KILL = s.kill;
+  $("#killbtn").textContent = KILL ? "已緊急停止（按此解除）" : "緊急停止";
+  $("#killbtn").classList.toggle("on", KILL);
+  const demo = a.trade_mode === 0;
+  $("#mode").className = "badge" + (a.trade_mode === undefined ? " dim" : demo ? "" : " solid");
+  $("#mode").textContent = a.trade_mode === undefined ? "尚未連線" : demo ? "🟡 模擬帳戶" : "🟡 實盤";
+  const age = s.ea_age;
+  $("#conn").className = "badge " + (age === null ? "dim" : age < 15 ? "ok" : age < 180 ? "dim" : "bad");
+  $("#conn").textContent = age === null ? "EA 尚未連線" : age < 15 ? "EA 連線中" : `EA ${age} 秒未回應`;
+  $("#acct").innerHTML = [["券商伺服器", esc(a.server || "–")], ["帳號", esc(a.login || "–")], ["餘額", `${fmt(a.balance)} ${esc(a.currency || "")}`],
+    ["淨值", fmt(a.equity)], ["可用保證金", fmt(a.margin_free)], ["MT5 連線", a.connected ? "正常" : '<span class="up">中斷</span>'],
+    ["允許自動交易", a.trade_allowed ? "是" : '<span class="up">否（MT5 的「演算法交易」按鈕要開）</span>']]
+    .map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+  $("#insts").innerHTML = s.instances.map(i => {
+    const p = i.positions[0];
+    const state = !i.enabled ? '<span class="badge dim">停用</span>' : i.paused_reason ? `<span class="badge bad">暫停：${esc(i.paused_reason)}</span>`
+      : i.paused ? '<span class="badge dim">暫停進場</span>' : '<span class="badge ok">運作中</span>';
+    const pos = p ? `${p.type === 0 ? '<span class="up">多</span>' : '<span class="down">空</span>'} ${p.volume} 手 @ ${fmt(p.price)}　停損 ${fmt(p.sl)}　停利 ${p.tp ? fmt(p.tp) : "–"}　浮動 ${sgn(p.profit)}`
+      : '<span class="dimc">無持倉</span>';
+    const ords = i.orders.length ? i.orders.map(o => `${esc(o.type)} ${o.volume} @ ${fmt(o.price)}`).join("　") : '<span class="dimc">無</span>';
+    const intent = (i.last_orders || []).map(o => `${esc(o.label)}${o.price ? " " + fmt(o.price) : ""}`).join("、") || '<span class="dimc">無</span>';
+    return `<div class="inst"><div class="t"><b>${esc(i.name)}</b><span class="dimc">${esc(i.strategy)}／${esc(i.broker_symbol)}／${i.lots} 手／magic ${i.magic}</span>${state}
+      <span style="flex:1"></span><button class="sec" data-p="${esc(i.id)}" data-on="${i.paused ? 0 : 1}">${i.paused ? "恢復進場" : "暫停進場"}</button></div>
+      <div class="grid">
+        <div style="grid-column:1/-1"><div class="k">持倉</div><div class="v">${pos}</div></div>
+        <div style="grid-column:1/-1"><div class="k">券商掛單</div><div class="v">${ords}</div></div>
+        <div style="grid-column:1/-1"><div class="k">上一根 K 收盤時策略的掛單</div><div class="v">${intent}</div></div>
+        <div><div class="k">上一根 K 結束</div><div class="v">${tstr(i.last_bar_end)}</div></div>
+        <div><div class="k">收盤價</div><div class="v">${fmt(i.last_close)}</div></div>
+        <div><div class="k">最新 1 分 K</div><div class="v">${tstr(i.last_m1)}</div></div>
+      </div></div>`;
+  }).join("");
+  document.querySelectorAll("button[data-p]").forEach(b => b.onclick = async () => { await api("/api/pause", {id: b.dataset.p, on: b.dataset.on === "1"}); load(); });
+  $("#events").innerHTML = s.events.map(e => `<div class="ev ${e.level}">${tstr(e.ts)}　${esc(e.msg)}</div>`).join("") || '<div class="dimc">尚無事件</div>';
+  $("#deals").innerHTML = `<tr><th class="l">時間</th><th class="l">商品</th><th>方向</th><th>開／平</th><th>手數</th><th>價格</th><th>損益</th><th>利息</th><th>magic</th></tr>` +
+    s.deals.map(d => `<tr><td class="l">${tstr(d.time_utc)}</td><td class="l">${esc(d.symbol)}</td><td>${d.type === 0 ? "買" : "賣"}</td><td>${d.entry === 0 ? "開" : "平"}</td>
+      <td>${d.volume}</td><td>${fmt(d.price)}</td><td>${d.entry === 0 ? "" : sgn(d.profit)}</td><td>${d.swap ? sgn(d.swap) : ""}</td><td>${d.magic}</td></tr>`).join("");
+  $("#acts").innerHTML = `<tr><th>#</th><th class="l">時間</th><th class="l">策略</th><th class="l">動作</th><th class="l">內容</th><th class="l">狀態</th></tr>` +
+    s.actions.map(x => { const p = x.payload, r = x.result;
+      const desc = [p.side, p.volume ? p.volume + " 手" : "", p.price ? "@" + fmt(p.price) : "", p.sl ? "SL " + fmt(p.sl) : "", p.tp ? "TP " + fmt(p.tp) : "", p.ticket ? "#" + p.ticket : "", p.reason || ""].filter(Boolean).join(" ");
+      const st = x.status === "failed" ? `<span class="up">失敗 ${r ? esc(r.retcode + " " + (r.msg || "")) : ""}</span>` : x.status === "done" ? '<span class="down">完成</span>' : esc(x.status);
+      return `<tr><td>${x.id}</td><td class="l">${tstr(x.created)}</td><td class="l">${esc(x.inst)}</td><td class="l">${esc(x.op)}</td><td class="l">${esc(desc)}</td><td class="l">${st}</td></tr>`; }).join("");
+}
+load(); setInterval(load, 5000);
+</script>
+</body>
+</html>

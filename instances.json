@@ -1,0 +1,32 @@
+[
+  {
+    "id": "jp_gy24",
+    "name": "日經 GuYuan_2024",
+    "symbol": "JP225",
+    "broker_symbol": "JPN225",
+    "strategy": "GuYuan_2024",
+    "minutes": 60,
+    "align": "session",
+    "params": {},
+    "lots": 0.1,
+    "magic": 225024,
+    "tick_size": 0.1,
+    "safety_units": 3.0,
+    "enabled": true
+  },
+  {
+    "id": "nas_arx",
+    "name": "那指 AR_crossover",
+    "symbol": "NAS100",
+    "broker_symbol": "NAS100",
+    "strategy": "AR_crossover",
+    "minutes": 60,
+    "align": "session",
+    "params": {},
+    "lots": 0.1,
+    "magic": 100011,
+    "tick_size": 0.1,
+    "safety_units": 3.0,
+    "enabled": true
+  }
+]
