@@ -340,7 +340,11 @@ def process_instance(inst, now, snap, paused=False):
                 side = 1 if o.action == "buy" else -1
                 px = tick_price(snap, inst, side) or close_px
                 ref = o.price if o.price is not None else close_px
-                safety = rp(inst, ref - side * su * float(s.u_now)) if su > 0 else 0.0
+                ebx = float(p.get("EBX", 0) or 0)
+                if ebx > 0:      # 策略有 EBX：安全停損就是回測裡的進場 K 災難停損（AvgRange(200)×EBX）
+                    safety = rp(inst, ref - side * ebx * float(B.avgrange(b, 200)[i]))
+                else:
+                    safety = rp(inst, ref - side * su * float(s.u_now)) if su > 0 else 0.0
                 market = o.kind == "market" or (o.kind == "stop" and (o.price - px) * side <= 0) \
                     or (o.kind == "limit" and (o.price - px) * side >= 0)
                 if market:

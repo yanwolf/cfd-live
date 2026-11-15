@@ -63,6 +63,10 @@ NAS100、JP225 測試資料上，進場時間與每筆損益都一致（只差�
 2. 把 `engine.py`、`bars.py`、`strategies.py`、`instruments.py` 四個檔案覆蓋到 `app/core/`
 3. 跑 `tests/test_live_vs_backtest.py` 確認一致，再推上去
 
+## EBX（進場 K 災難停損）
+策略參數有 `EBX`（例如 GuYuan_2024_S 預設 1）時，進場附帶的安全停損改為 AvgRange(200)×EBX，
+跟回測的進場 K 災難停損一致；下一根 K 收盤時換成策略自己的停損。EBX=0 時維持原本的 `safety_units`。
+
 ## 限制（第一版）
 - 不支援持倉中反手（TMFF 這類多空策略要再加），目前兩支都只做多
 - 日內出場 DAYX 以美東 17:00 轉倉為準

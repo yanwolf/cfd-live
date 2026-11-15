@@ -7,14 +7,14 @@ from synth import make
 from sim import simulate
 
 
-def compare(strategy, symbol="NAS100", days=36, spread=1.5):
-    m = make(days=days, price=18000.0, seed=5)
-    fb, k0, dt = simulate(strategy, symbol, {k: v.copy() for k, v in m.items()}, spread, start_day=21, bid_trigger=True)
+def compare(strategy, symbol="NAS100", days=36, spread=1.5, params=None, seed=5):
+    m = make(days=days, price=18000.0, seed=seed)
+    fb, k0, dt = simulate(strategy, symbol, {k: v.copy() for k, v in m.items()}, spread, start_day=21, bid_trigger=True, inst_extra={"params": params or {}})
     from app.core import engine
     from app.core.strategies import REGISTRY
     costs = {"spread": spread, "slippage": 0.0, "commission": 0.0, "swap_long_pct": 0.0, "swap_short_pct": 0.0}
     start = int(m["ts"][k0]) - 3600          # 實盤第一次同步就處理上一根 K 的收盤，回測對齊到那一根
-    r = engine.run(REGISTRY[strategy], {}, m, costs, start_ts=start, symbol=symbol, cache_key=("x", strategy))
+    r = engine.run(REGISTRY[strategy], params or {}, m, costs, start_ts=start, symbol=symbol, cache_key=("x", strategy))
     bt = r["trades"]
     live = fb.closed
     bt_net = sum(t["net"] for t in bt)

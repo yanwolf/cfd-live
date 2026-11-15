@@ -111,6 +111,11 @@ class FakeBroker:
                     self.close(ts, p, min(p["sl"], o), "SL"); continue
                 if p["tp"] and h >= p["tp"]:
                     self.close(ts, p, max(p["tp"], o), "TP"); continue
+            elif self.bid_trigger:            # 跟回測一致：空單也用 bid 觸發，成交價再加點差
+                if p["sl"] and h >= p["sl"]:
+                    self.close(ts, p, max(p["sl"], o) + sp, "SL"); continue
+                if p["tp"] and l <= p["tp"]:
+                    self.close(ts, p, min(p["tp"], o) + sp, "TP"); continue
             else:
                 if p["sl"] and h + sp >= p["sl"]:
                     self.close(ts, p, max(p["sl"], o + sp), "SL"); continue
