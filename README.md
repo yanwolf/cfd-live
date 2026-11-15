@@ -12,10 +12,13 @@ Coolify（這個服務）  ⇄  HTTPS  ⇄  MT5 裡的 TzujenBridge EA  →  券
 ## 目前跑的策略（instances.json）
 | id | 商品 | 策略 | 手數 | magic |
 |---|---|---|---|---|
-| jp_gy24 | JPN225 | GuYuan_2024（預設參數） | 0.1 | 225024 |
+| jp_gy24 | JPN225 | GuYuan_2024（台指參數） | 0.1 | 225024 |
+| jp_gy24_w9 | JPN225 | GuYuan_2024（LOSS 2、WIN 9、EBX 2，日經掃描的平台，並排比較用） | 0.1 | 225029 |
 | nas_arx | NAS100 | AR_crossover（預設參數） | 0.1 | 100011 |
 
 改策略、手數、新增商品：改 `instances.json` 推上去。magic 不能重複。
+同一商品可以同時跑多支（例如上面兩支日經）：帳戶要是 **Hedge（對沖）** 模式，各支用自己的 magic 管理持倉、掛單、成交，
+互不干擾（`tests/test_two_instances.py`）。Netting（淨額）帳戶不行，同商品的部位會合併。
 
 ## 部署（Coolify）
 1. 新 GitHub repo（不要跟 us-index-lab 放一起，改回測室才不會重啟實盤）

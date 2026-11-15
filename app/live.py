@@ -235,9 +235,15 @@ def process_instance(inst, now, snap, paused=False):
     if m is None or len(m["ts"]) < MIN_M1:
         set_state(inst["id"], st)
         return n_new
-    # 資料還在補（第一次連線回補歷史、EA 斷線後追資料）：最新 1 分 K 落後報價超過 3 分鐘就先不動作
+    # 資料還在補（第一次連線回補歷史、EA 斷線後追資料）就先不動作。
+    # EA 1.01 起回報券商「最新一根已完成的 1 分 K」時間（last_m1）：我們的資料追上它就算完整，
+    # 休市後重新開盤（例如日經 08:45）不會被誤判成資料落後。舊版 EA 沒有 last_m1，退回用報價時間判斷。
     tk = (snap.get("ticks") or {}).get(inst["broker_symbol"]) or {}
-    if tk.get("time"):
+    if tk.get("last_m1"):
+        if T.srv2utc(int(tk["last_m1"])) > int(m["ts"][-1]):
+            set_state(inst["id"], st)
+            return n_new
+    elif tk.get("time"):
         tick_utc = T.srv2utc(int(tk["time"]))
         if tick_utc - int(m["ts"][-1]) > 180:
             set_state(inst["id"], st)

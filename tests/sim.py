@@ -50,7 +50,7 @@ class FakeBroker:
         d = 1 if p["type"] == 0 else -1
         self.pos.remove(p)
         self._deal(ts, p["magic"], 1, -d, price, p["volume"], p["ticket"], profit=(price - p["price"]) * d * p["volume"])
-        self.closed.append((d, p["price"], price, p["_ts"], ts, reason))
+        self.closed.append((d, p["price"], price, p["_ts"], ts, reason, p["magic"]))
 
     def execute(self, lines, ts, k):
         o_bid = self.m["o"][k]
@@ -133,20 +133,21 @@ class FakeBroker:
         pl = {"login": 1, "server": "Fake-Demo", "connected": True, "balance": 10000, "equity": 10000, "time": T.utc2srv(ts),
               "positions": [{k2: v for k2, v in p.items() if not k2.startswith("_")} for p in self.pos],
               "orders": list(self.ords), "deals": self.deals, "results": self.results,
-              "ticks": {self.sym: {"bid": self.m["o"][k], "ask": self.m["o"][k] + self.spread, "time": T.utc2srv(ts)}},
+              "ticks": {self.sym: {"bid": self.m["o"][k], "ask": self.m["o"][k] + self.spread, "time": T.utc2srv(ts),
+                                   "last_m1": T.utc2srv(int(self.m["ts"][k - 1])) if k > 0 else 0}},
               "bars": {self.sym: bars}}
         self.deals, self.results = [], []
         return pl
 
 
-def simulate(strategy, symbol, m, spread, start_day=20, inst_extra=None, bid_trigger=False):
+def simulate(strategy, symbol, m, spread, start_day=20, inst_extra=None, bid_trigger=False, instances=None):
     tmp = tempfile.mkdtemp()
     os.environ["DATA_DIR"] = tmp
     inst = {"id": "t1", "name": "測試", "symbol": symbol, "broker_symbol": symbol, "strategy": strategy, "lots": 1.0,
             "magic": 777, "safety_units": 3.0, "enabled": True, "params": {}, "tick_size": 0.000001}
     inst.update(inst_extra or {})
     with open(os.path.join(tmp, "instances.json"), "w") as fh:
-        json.dump([inst], fh)
+        json.dump(instances or [inst], fh)
     os.environ["INSTANCES_FILE"] = os.path.join(tmp, "instances.json")
     import importlib
     from app import config, db

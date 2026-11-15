@@ -4,7 +4,7 @@
 //| 策略邏輯全部在伺服器（cfd-live），這裡不做任何判斷                   |
 //+------------------------------------------------------------------+
 #property copyright "tzujenlab"
-#property version   "1.00"
+#property version   "1.01"
 
 #include <Trade\Trade.mqh>
 
@@ -14,7 +14,7 @@ input int    SyncMs       = 2000;                          // 同步間隔（毫
 input bool   AllowLive    = false;                         // 允許在真實帳戶下單（預設只在模擬帳戶下單）
 input int    MaxBarsPerSync = 3000;                        // 每次最多送幾根 1 分 K
 
-#define EA_VERSION "1.00"
+#define EA_VERSION "1.01"
 
 CTrade   trade;
 string   g_syms[];
@@ -204,7 +204,8 @@ string JsonTicks()
       MqlTick t;
       if(!SymbolInfoTick(g_syms[k], t)) continue;
       s += (StringLen(s) > 0 ? "," : "") + "\"" + Esc(g_syms[k]) + "\":{\"bid\":" + D(t.bid) + ",\"ask\":" + D(t.ask) +
-           ",\"time\":" + IntegerToString((long)t.time) + "}";
+           ",\"time\":" + IntegerToString((long)t.time) +
+           ",\"last_m1\":" + IntegerToString((long)iTime(g_syms[k], PERIOD_M1, 1)) + "}";   // 最新一根已完成的 1 分 K
      }
    return "{" + s + "}";
   }
