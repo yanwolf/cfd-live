@@ -30,6 +30,49 @@
     "enabled": true
   },
   {
+    "id": "nas_gy25_60",
+    "name": "那指 GuYuan_2025 60 分",
+    "symbol": "NAS100",
+    "broker_symbol": "NAS100",
+    "strategy": "GuYuan_2025",
+    "minutes": 60,
+    "align": "session",
+    "params": {},
+    "lots": 0.1,
+    "magic": 100060,
+    "tick_size": 0.1,
+    "safety_units": 3.0,
+    "enabled": true
+  },
+  {
+    "id": "nas_gy24s",
+    "name": "那指 GuYuan_2024_S（空）",
+    "symbol": "NAS100",
+    "broker_symbol": "NAS100",
+    "strategy": "GuYuan_2024_S",
+    "minutes": 60,
+    "align": "session",
+    "params": {
+      "N1": 3,
+      "N2": 3,
+      "N3": 5,
+      "HH": 10,
+      "LL": 14,
+      "LOSS": 1.1,
+      "WIN": 2,
+      "Twin": 0.3,
+      "Tstop": 3.3,
+      "MA1": 1,
+      "MA2": 100,
+      "EBX": 2
+    },
+    "lots": 0.1,
+    "magic": 100024,
+    "tick_size": 0.1,
+    "safety_units": 3.0,
+    "enabled": true
+  },
+  {
     "id": "jp_gy24_w9",
     "name": "日經 GuYuan_2024 WIN9（已停用）",
     "symbol": "JP225",
@@ -65,7 +108,7 @@
   },
   {
     "id": "nas_gy25",
-    "name": "那指 GuYuan_2025",
+    "name": "那指 GuYuan_2025 20 分（已停用，改 60 分）",
     "symbol": "NAS100",
     "broker_symbol": "NAS100",
     "strategy": "GuYuan_2025",
@@ -76,6 +119,6 @@
     "magic": 100025,
     "tick_size": 0.1,
     "safety_units": 3.0,
-    "enabled": true
+    "enabled": false
   }
 ]
