@@ -10,13 +10,17 @@ Coolify（這個服務）  ⇄  HTTPS  ⇄  MT5 裡的 TzujenBridge EA  →  券
 ```
 
 ## 目前跑的策略（instances.json）
-| id | 商品 | 策略 | 手數 | magic |
-|---|---|---|---|---|
-| jp_gy24 | JPN225 | GuYuan_2024（台指參數） | 0.1 | 225024 |
-| jp_gy24_w9 | JPN225 | GuYuan_2024（LOSS 2、WIN 9、EBX 2，日經掃描的平台，並排比較用） | 0.1 | 225029 |
-| nas_arx | NAS100 | AR_crossover（預設參數） | 0.1 | 100011 |
+| id | 商品 | 策略 | K | 手數 | magic | 狀態 |
+|---|---|---|---|---|---|---|
+| jp_gy25 | JPN225 | GuYuan_2025（預設參數） | 20 分 | 0.1 | 225025 | 主力 |
+| nas_gy25 | NAS100 | GuYuan_2025（預設參數） | 20 分 | 0.1 | 100025 | 主力（2022 空頭仍獲利，和日經互補） |
+| jp_gy24 | JPN225 | GuYuan_2024（台指參數） | 60 分 | 0.1 | 225024 | 對照組 |
+| nas_arx | NAS100 | AR_crossover（預設參數） | 60 分 | 0.1 | 100011 | 對照組 |
+| jp_gy24_w9 | JPN225 | GuYuan_2024（LOSS 2、WIN 9、EBX 2） | 60 分 | 0.1 | 225029 | 停用（和 jp_gy24 相關 0.88） |
 
 改策略、手數、新增商品：改 `instances.json` 推上去。magic 不能重複。
+停用一支：把 `enabled` 改成 `false`（不要直接刪掉）。系統會把它剩下的持倉平掉、掛單撤掉，之後不再進場；
+magic 保留著不要給別支用。直接刪掉的話，它的持倉會變成「未知 magic」沒人管。
 同一商品可以同時跑多支（例如上面兩支日經）：帳戶要是 **Hedge（對沖）** 模式，各支用自己的 magic 管理持倉、掛單、成交，
 互不干擾（`tests/test_two_instances.py`）。Netting（淨額）帳戶不行，同商品的部位會合併。
 

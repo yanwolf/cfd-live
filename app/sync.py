@@ -84,7 +84,7 @@ def ingest(p, now):
 
 def checks(snap, now, instances):
     """對帳：部位數量、手數、保護單"""
-    magics = {i["magic"]: i for i in instances}
+    magics = {i["magic"]: i for i in config_instances()}       # 停用的也算已知（它們的持倉由 retire_actions 處理）
     for i in instances:
         poss = [x for x in snap["positions"] if x["magic"] == i["magic"]]
         if len(poss) > 1:
@@ -114,6 +114,23 @@ def kill_actions(snap, instances):
     db.kv_set("kill_sent", [list(x) for x in sent])
 
 
+def retire_actions(snap, retired):
+    """instances.json 裡 enabled=false 的策略：剩下的持倉平掉、掛單撤掉，之後不再進場"""
+    sent = set(tuple(x) for x in db.kv_get("retire_sent", []))
+    mine = {i["magic"]: i for i in retired}
+    for x in snap["positions"]:
+        if x["magic"] in mine and ("p", x["ticket"]) not in sent:
+            live.new_action(mine[x["magic"]]["id"], "CLOSE", {"ticket": x["ticket"], "symbol": x["symbol"], "magic": x["magic"],
+                                                              "reason": "策略停用"})
+            alerts.event("warn", f"{mine[x['magic']]['name']} 已停用，平掉剩下的持倉 {x['ticket']}", mine[x["magic"]]["id"])
+            sent.add(("p", x["ticket"]))
+    for o in snap["orders"]:
+        if o["magic"] in mine and ("o", o["ticket"]) not in sent:
+            live.new_action(mine[o["magic"]]["id"], "CANCEL", {"ticket": o["ticket"], "symbol": o["symbol"], "magic": o["magic"]})
+            sent.add(("o", o["ticket"]))
+    db.kv_set("retire_sent", [list(x) for x in sent][-500:])
+
+
 def _fmt(v):
     if v is None:
         return ""
@@ -125,11 +142,13 @@ def _fmt(v):
 def handle(p, now=None):
     now = int(now or time.time())
     instances = [i for i in config_instances() if i.get("enabled", True)]
+    retired = [i for i in config_instances() if not i.get("enabled", True)]
     snap = ingest(p, now)
     kill = bool(db.kv_get("kill", False))
     if kill:
-        kill_actions(snap, instances)
+        kill_actions(snap, instances + retired)
     else:
+        retire_actions(snap, retired)
         paused = set(db.kv_get("paused", []))
         for inst in instances:
             try:

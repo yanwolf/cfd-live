@@ -1,7 +1,7 @@
 [
   {
     "id": "jp_gy24",
-    "name": "日經 GuYuan_2024",
+    "name": "日經 GuYuan_2024（對照組）",
     "symbol": "JP225",
     "broker_symbol": "JPN225",
     "strategy": "GuYuan_2024",
@@ -15,8 +15,23 @@
     "enabled": true
   },
   {
+    "id": "jp_gy25",
+    "name": "日經 GuYuan_2025",
+    "symbol": "JP225",
+    "broker_symbol": "JPN225",
+    "strategy": "GuYuan_2025",
+    "minutes": 20,
+    "align": "session",
+    "params": {},
+    "lots": 0.1,
+    "magic": 225025,
+    "tick_size": 0.1,
+    "safety_units": 3.0,
+    "enabled": true
+  },
+  {
     "id": "jp_gy24_w9",
-    "name": "日經 GuYuan_2024 WIN9",
+    "name": "日經 GuYuan_2024 WIN9（已停用）",
     "symbol": "JP225",
     "broker_symbol": "JPN225",
     "strategy": "GuYuan_2024",
@@ -31,11 +46,11 @@
     "magic": 225029,
     "tick_size": 0.1,
     "safety_units": 3.0,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "nas_arx",
-    "name": "那指 AR_crossover",
+    "name": "那指 AR_crossover（對照組）",
     "symbol": "NAS100",
     "broker_symbol": "NAS100",
     "strategy": "AR_crossover",
@@ -44,6 +59,21 @@
     "params": {},
     "lots": 0.1,
     "magic": 100011,
+    "tick_size": 0.1,
+    "safety_units": 3.0,
+    "enabled": true
+  },
+  {
+    "id": "nas_gy25",
+    "name": "那指 GuYuan_2025",
+    "symbol": "NAS100",
+    "broker_symbol": "NAS100",
+    "strategy": "GuYuan_2025",
+    "minutes": 20,
+    "align": "session",
+    "params": {},
+    "lots": 0.1,
+    "magic": 100025,
     "tick_size": 0.1,
     "safety_units": 3.0,
     "enabled": true
