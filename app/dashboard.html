@@ -43,6 +43,7 @@
   <h1>CFD 自動下單</h1>
   <span id="mode" class="badge dim">—</span>
   <span id="conn" class="badge dim">EA —</span>
+  <span id="tgb" class="badge dim" style="display:none"></span>
   <span style="flex:1"></span>
   <button id="killbtn" class="kill">緊急停止</button>
 </header>
@@ -83,6 +84,12 @@ async function load() {
   const age = s.ea_age;
   $("#conn").className = "badge " + (age === null ? "dim" : age < 15 ? "ok" : age < 180 ? "dim" : "bad");
   $("#conn").textContent = age === null ? "EA 尚未連線" : age < 15 ? "EA 連線中" : `EA ${age} 秒未回應`;
+  const tg = s.tg || {};
+  const tgLate = tg.pending && tg.oldest && (Date.now() / 1000 - tg.oldest > 60);
+  $("#tgb").style.display = tg.enabled && (tgLate || tg.gave_up_24h) ? "" : "none";
+  $("#tgb").className = "badge " + (tg.gave_up_24h ? "bad" : "dim");
+  $("#tgb").title = tg.last_err || "";
+  $("#tgb").textContent = tg.gave_up_24h ? `Telegram 有 ${tg.gave_up_24h} 則送不出去` : `Telegram ${tg.pending} 則待重送`;
   $("#acct").innerHTML = [["券商伺服器", esc(a.server || "–")], ["帳號", esc(a.login || "–")], ["餘額", `${fmt(a.balance)} ${esc(a.currency || "")}`],
     ["淨值", fmt(a.equity)], ["可用保證金", fmt(a.margin_free)], ["MT5 連線", a.connected ? "正常" : '<span class="up">中斷</span>'],
     ["允許自動交易", a.trade_allowed ? "是" : '<span class="up">否（MT5 的「演算法交易」按鈕要開）</span>']]

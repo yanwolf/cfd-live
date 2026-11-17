@@ -89,7 +89,7 @@ def status():
             "deals": [json.loads(r[0]) for r in deals],
             "actions": [{"id": a[0], "inst": a[1], "op": a[2], "payload": json.loads(a[3]), "status": a[4], "created": a[5],
                          "result": json.loads(a[6]) if a[6] else None} for a in acts],
-            "events": alerts.recent(60)}
+            "events": alerts.recent(60), "tg": alerts.tg_status()}
 
 
 @app.post("/api/kill")
@@ -143,3 +143,4 @@ def _start():
     db.conn()
     sync.config_instances()
     threading.Thread(target=_watchdog, daemon=True).start()
+    alerts._ensure_worker()          # 重啟前沒送出的 Telegram 會接著送
