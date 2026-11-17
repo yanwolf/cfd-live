@@ -34,6 +34,10 @@
   .inst{border:1px solid var(--line);border-radius:9px;padding:12px;margin-bottom:10px;background:var(--panel2)}
   .inst .t{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
   .inst .t b{font-size:16px;color:var(--gold)}
+  .ps{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer;flex-wrap:wrap}
+  .ps:last-child{border-bottom:0}
+  .ps .n{color:var(--gold);font-weight:600}
+  .ps .d{color:var(--dim);font-size:12.5px;width:100%}
   .ev{font-size:13px;padding:5px 0;border-bottom:1px solid var(--line);white-space:pre-wrap}
   .ev.error{color:var(--up)} .ev.warn{color:var(--warn)} .ev.trade{color:var(--gold)}
 </style>
@@ -49,6 +53,7 @@
 </header>
 <main>
   <div class="panel"><div class="grid" id="acct"></div></div>
+  <div class="panel"><h2>目前持倉</h2><div id="possum"></div></div>
   <div class="panel"><h2>策略</h2><div id="insts"></div></div>
   <div class="panel"><h2>事件</h2><div id="events"></div></div>
   <div class="panel"><h2>最近成交（券商）</h2><div class="scroll"><table id="deals"></table></div></div>
@@ -94,6 +99,17 @@ async function load() {
     ["淨值", fmt(a.equity)], ["可用保證金", fmt(a.margin_free)], ["MT5 連線", a.connected ? "正常" : '<span class="up">中斷</span>'],
     ["允許自動交易", a.trade_allowed ? "是" : '<span class="up">否（MT5 的「演算法交易」按鈕要開）</span>']]
     .map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+  const held = s.instances.filter(i => i.positions.length), idle = s.instances.filter(i => !i.positions.length && i.enabled);
+  const tot = held.reduce((a, i) => a + i.positions.reduce((b, p) => b + (p.profit || 0), 0), 0);
+  $("#possum").innerHTML = (held.length ? held.flatMap(i => i.positions.map(p => `<div class="ps" data-go="${esc(i.id)}">
+      <span class="n">${esc(i.name)}</span>
+      ${p.type === 0 ? '<span class="up">多</span>' : '<span class="down">空</span>'} ${p.volume} 手
+      <span style="flex:1"></span>${sgn(p.profit)}
+      <div class="d">${esc(i.broker_symbol)} @ ${fmt(p.price)}　停損 ${fmt(p.sl)}　停利 ${p.tp ? fmt(p.tp) : "–"}　${i.orders.length ? `掛單 ${i.orders.length} 張` : ""}</div></div>`)).join("")
+      + (held.length > 1 ? `<div class="ps" style="cursor:default"><span class="dimc">合計浮動</span><span style="flex:1"></span>${sgn(tot)}</div>` : "")
+    : '<div class="dimc" style="padding:4px 0">目前沒有任何持倉</div>')
+    + (idle.length ? `<div class="dimc" style="font-size:12.5px;margin-top:8px">無持倉：${idle.map(i => esc(i.name)).join("、")}</div>` : "");
+  document.querySelectorAll("[data-go]").forEach(r => r.onclick = () => document.getElementById("inst-" + r.dataset.go).scrollIntoView({behavior: "smooth", block: "start"}));
   $("#insts").innerHTML = s.instances.map(i => {
     const p = i.positions[0];
     const state = !i.enabled ? '<span class="badge dim">停用</span>' : i.paused_reason ? `<span class="badge bad">暫停：${esc(i.paused_reason)}</span>`
@@ -102,7 +118,7 @@ async function load() {
       : '<span class="dimc">無持倉</span>';
     const ords = i.orders.length ? i.orders.map(o => `${esc(o.type)} ${o.volume} @ ${fmt(o.price)}`).join("　") : '<span class="dimc">無</span>';
     const intent = (i.last_orders || []).map(o => `${esc(o.label)}${o.price ? " " + fmt(o.price) : ""}`).join("、") || '<span class="dimc">無</span>';
-    return `<div class="inst"><div class="t"><b>${esc(i.name)}</b><span class="dimc">${esc(i.strategy)}／${esc(i.broker_symbol)}／${i.lots} 手／magic ${i.magic}</span>${state}
+    return `<div class="inst" id="inst-${esc(i.id)}" style="scroll-margin-top:10px"><div class="t"><b>${esc(i.name)}</b><span class="dimc">${esc(i.strategy)}／${esc(i.broker_symbol)}／${i.lots} 手／magic ${i.magic}</span>${state}
       <span style="flex:1"></span><button class="sec" data-p="${esc(i.id)}" data-on="${i.paused ? 0 : 1}">${i.paused ? "恢復進場" : "暫停進場"}</button></div>
       <div class="grid">
         <div style="grid-column:1/-1"><div class="k">持倉</div><div class="v">${pos}</div></div>
