@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 
-from . import alerts, config, db, live, sync
+from . import alerts, config, db, live, recon, sync
 
 HERE = os.path.dirname(__file__)
 app = FastAPI(title="cfd-live")
@@ -90,6 +90,12 @@ def status():
             "actions": [{"id": a[0], "inst": a[1], "op": a[2], "payload": json.loads(a[3]), "status": a[4], "created": a[5],
                          "result": json.loads(a[6]) if a[6] else None} for a in acts],
             "events": alerts.recent(60), "tg": alerts.tg_status()}
+
+
+@app.get("/api/recon")
+async def api_recon():
+    """實盤 vs 回測逐筆對帳（每支策略從它開始跑的時間起算）"""
+    return await run_in_threadpool(recon.reconcile_all, sync.config_instances())
 
 
 @app.post("/api/kill")

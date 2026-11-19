@@ -140,7 +140,7 @@ class FakeBroker:
         return pl
 
 
-def simulate(strategy, symbol, m, spread, start_day=20, inst_extra=None, bid_trigger=False, instances=None):
+def simulate(strategy, symbol, m, spread, start_day=20, inst_extra=None, bid_trigger=False, instances=None, after=None):
     tmp = tempfile.mkdtemp()
     os.environ["DATA_DIR"] = tmp
     inst = {"id": "t1", "name": "測試", "symbol": symbol, "broker_symbol": symbol, "strategy": strategy, "lots": 1.0,
@@ -171,5 +171,7 @@ def simulate(strategy, symbol, m, spread, start_day=20, inst_extra=None, bid_tri
                 since = T.srv2utc(int(ln.split("|")[2]))
         fb.execute(lines, ts, k)
         fb.run_minute(ts, k)
+    if after:
+        after(int(ts_all[-1]) + 60)
     shutil.rmtree(tmp, ignore_errors=True)
     return fb, k0, time.time() - t0

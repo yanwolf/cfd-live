@@ -201,6 +201,7 @@ def handle_position_changes(inst, st, pos, pend):
 def process_instance(inst, now, snap, paused=False):
     """回傳這次新增的動作數。snap：EA 最新回報（持倉、掛單、報價，時間已換成 UTC）"""
     st = get_state(inst["id"])
+    st.setdefault("first_seen", int(now))          # 給「實盤 vs 回測」對帳當起算點
     poss = [p for p in snap.get("positions", []) if p["magic"] == inst["magic"] and p["symbol"] == inst["broker_symbol"]]
     pend = [o for o in snap.get("orders", []) if o["magic"] == inst["magic"] and o["symbol"] == inst["broker_symbol"]]
     if len(poss) > 1:

@@ -55,6 +55,13 @@
   <div class="panel"><div class="grid" id="acct"></div></div>
   <div class="panel"><h2>目前持倉</h2><div id="possum"></div></div>
   <div class="panel"><h2>策略</h2><div id="insts"></div></div>
+  <div class="panel">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">實盤 vs 回測</h2><span style="flex:1"></span>
+      <button class="sec" id="reconbtn">計算對帳</button><button class="sec" id="reconcsv" style="display:none">下載 CSV</button></div>
+    <p class="dimc" style="font-size:12.5px;margin:6px 0 0">用同一份 1 分 K、同一支策略，從每支策略開始跑的時間起重跑回測，跟券商成交逐筆比。
+      滑價已扣掉點差（點差用商品預設值，單筆會有幾點誤差，看平均）；正數 = 比回測差。</p>
+    <div id="recon"></div>
+  </div>
   <div class="panel"><h2>事件</h2><div id="events"></div></div>
   <div class="panel"><h2>最近成交（券商）</h2><div class="scroll"><table id="deals"></table></div></div>
   <div class="panel"><h2>最近送出的動作</h2><div class="scroll"><table id="acts"></table></div></div>
@@ -140,6 +147,55 @@ async function load() {
       const st = x.status === "failed" ? `<span class="up">失敗 ${r ? esc(r.retcode + " " + (r.msg || "")) : ""}</span>` : x.status === "done" ? '<span class="down">完成</span>' : esc(x.status);
       return `<tr><td>${x.id}</td><td class="l">${tstr(x.created)}</td><td class="l">${esc(x.inst)}</td><td class="l">${esc(x.op)}</td><td class="l">${esc(desc)}</td><td class="l">${st}</td></tr>`; }).join("");
 }
+let RECON = null;
+const ago = s => s === null || s === undefined ? "–" : (Math.abs(s) < 120 ? `${s > 0 ? "+" : ""}${s} 秒` : `${s > 0 ? "+" : ""}${Math.round(s / 60)} 分`);
+const slip = v => v === null || v === undefined ? "–" : `<span class="${v > 0 ? "warn" : ""}">${v > 0 ? "+" : ""}${fmt(v, 2)}</span>`;
+$("#reconbtn").onclick = async () => {
+  $("#reconbtn").disabled = true; $("#recon").innerHTML = '<div class="dimc" style="padding:8px 0">計算中…（每支策略重跑一次回測，約幾秒到幾十秒）</div>';
+  try { RECON = await api("/api/recon"); renderRecon(); $("#reconcsv").style.display = ""; }
+  catch (e) { $("#recon").innerHTML = `<div class="up">${esc(e.message)}</div>`; }
+  $("#reconbtn").disabled = false;
+};
+function renderRecon() {
+  $("#recon").innerHTML = RECON.map(x => {
+    if (x.error) return `<div class="inst"><b class="gold">${esc(x.name)}</b>　<span class="up">${esc(x.error)}</span></div>`;
+    const s = x.summary;
+    const head = `<div class="grid" style="margin-top:6px">
+      <div><div class="k">實盤／回測筆數</div><div class="v">${s.live_n}／${s.bt_n}</div></div>
+      <div><div class="k">相符</div><div class="v">${s.matched}</div></div>
+      <div><div class="k">回測有、實盤沒有</div><div class="v ${s.missed ? "warn" : ""}">${s.missed}</div></div>
+      <div><div class="k">實盤有、回測沒有</div><div class="v ${s.extra ? "warn" : ""}">${s.extra}</div></div>
+      <div><div class="k">平均進場滑價（點）</div><div class="v">${slip(s.entry_slip_avg)}</div></div>
+      <div><div class="k">平均出場滑價（點）</div><div class="v">${slip(s.exit_slip_avg)}</div></div>
+      <div><div class="k">每邊滑價（實測／回測設定）</div><div class="v">${slip(s.slip_per_side)}／${fmt(s.slip_assumed, 1)}</div></div>
+      <div><div class="k">已平倉相符筆：實盤點數／回測點數</div><div class="v">${sgn(s.live_pts)}／${sgn(s.bt_pts)}</div></div>
+      <div><div class="k">實盤已實現損益</div><div class="v">${sgn(s.live_money)}</div></div>
+      <div><div class="k">起算</div><div class="v">${tstr(s.since)}</div></div></div>`;
+    const rows = x.rows.slice().reverse().map(r => `<tr>
+      <td class="l ${r.status === "相符" ? "" : "warn"}">${r.status}</td><td>${r.dir > 0 ? '<span class="up">多</span>' : '<span class="down">空</span>'}</td>
+      <td class="l">${tstr(r.live_entry_ts || r.bt_entry_ts)}</td><td>${ago(r.entry_dt)}</td>
+      <td>${fmt(r.live_entry)}</td><td>${fmt(r.bt_entry)}</td><td>${slip(r.entry_slip)}</td>
+      <td class="l">${r.live_exit_ts ? tstr(r.live_exit_ts) : (r.live_entry_ts ? "持倉中" : "")}</td><td>${ago(r.exit_dt)}</td>
+      <td>${fmt(r.live_exit)}</td><td>${fmt(r.bt_exit)}</td><td>${slip(r.exit_slip)}</td>
+      <td class="l">${esc(r.bt_out || "")}</td><td>${r.live_pts === null ? "–" : sgn(r.live_pts)}</td><td>${r.bt_pts_after_spread === null ? "–" : sgn(r.bt_pts_after_spread)}</td></tr>`).join("");
+    return `<div class="inst"><div class="t"><b>${esc(x.name)}</b><span class="dimc">${esc(x.strategy)}／${esc(x.symbol)}／magic ${x.magic}${x.enabled ? "" : "／已停用"}</span></div>${head}
+      <details style="margin-top:8px"><summary class="dimc" style="cursor:pointer">逐筆明細（${x.rows.length} 筆）</summary>
+      <div class="scroll"><table><tr><th class="l">狀態</th><th>方向</th><th class="l">進場時間</th><th>時間差</th><th>實盤進場</th><th>回測進場</th><th>進場滑價</th>
+      <th class="l">出場時間</th><th>時間差</th><th>實盤出場</th><th>回測出場</th><th>出場滑價</th><th class="l">回測出場原因</th><th>實盤點數</th><th>回測點數</th></tr>${rows}</table></div></details></div>`;
+  }).join("") || '<div class="dimc">沒有策略</div>';
+}
+$("#reconcsv").onclick = () => {
+  const cols = ["status", "dir", "live_entry_ts", "bt_entry_ts", "entry_dt", "live_entry", "bt_entry", "entry_slip", "live_exit_ts", "bt_exit_ts", "exit_dt",
+                "live_exit", "bt_exit", "exit_slip", "bt_in", "bt_out", "live_pts", "bt_pts_after_spread", "live_money"];
+  const iso = v => v ? new Date(v * 1000).toISOString().replace("T", " ").slice(0, 19) : "";
+  let out = "\ufeff## 摘要\nid,name,strategy,symbol,magic," + Object.keys((RECON.find(x => x.summary) || {summary: {}}).summary).join(",") + "\n";
+  RECON.filter(x => x.summary).forEach(x => out += [x.id, x.name, x.strategy, x.symbol, x.magic, ...Object.values(x.summary)].join(",") + "\n");
+  out += "\n## 逐筆\nid," + cols.join(",") + "\n";
+  RECON.filter(x => x.rows).forEach(x => x.rows.forEach(r => out += [x.id, ...cols.map(c => c.endsWith("_ts") ? iso(r[c]) : (r[c] ?? ""))].join(",") + "\n"));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([out], {type: "text/csv;charset=utf-8"}));
+  a.download = `recon_${new Date().toISOString().slice(0, 10)}.csv`; document.body.append(a); a.click(); a.remove();
+};
 load(); setInterval(load, 5000);
 </script>
 </body>
