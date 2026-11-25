@@ -62,6 +62,10 @@
       滑價已扣掉點差（點差用商品預設值，單筆會有幾點誤差，看平均）；正數 = 比回測差。</p>
     <div id="recon"></div>
   </div>
+  <div class="panel" id="extpanel" style="display:none"><h2>外部訊號：模擬 vs MT5</h2>
+    <p class="dimc" style="font-size:12.5px;margin:6px 0 0">策略在別的服務跑（例如 gold-scalper），這裡照著在 MT5 下單，量點差、滑價、延遲。
+      滑價：成交價比下單當下的報價差多少（正數＝比較差）。報價差：券商中價 − 對方的幣安價。模擬帳戶的成交通常比真實帳戶理想。</p>
+    <div id="ext"></div></div>
   <div class="panel"><h2>事件</h2><div id="events"></div></div>
   <div class="panel"><h2>最近成交（券商）</h2><div class="scroll"><table id="deals"></table></div></div>
   <div class="panel"><h2>最近送出的動作</h2><div class="scroll"><table id="acts"></table></div></div>
@@ -196,7 +200,43 @@ $("#reconcsv").onclick = () => {
   a.href = URL.createObjectURL(new Blob([out], {type: "text/csv;charset=utf-8"}));
   a.download = `recon_${new Date().toISOString().slice(0, 10)}.csv`; document.body.append(a); a.click(); a.remove();
 };
-load(); setInterval(load, 5000);
+async function loadExt() {
+  let xs;
+  try { xs = await api("/api/ext"); } catch (e) { return; }
+  $("#extpanel").style.display = xs.length ? "" : "none";
+  const n2 = v => v === null || v === undefined ? "–" : (v > 0 ? "+" : "") + Number(v).toFixed(2);
+  $("#ext").innerHTML = xs.map(x => {
+    const m = x.summary, d = x.desired || {}, p = d.position;
+    const age = x.desired_age;
+    const feed = age === null ? '<span class="badge bad">還沒收到回報</span>' : age < 60 ? '<span class="badge ok">回報正常</span>'
+      : `<span class="badge ${age < 180 ? "dim" : "bad"}">${age} 秒沒回報</span>`;
+    const want = p ? `${p.direction === "bullish" ? '<span class="up">多</span>' : '<span class="down">空</span>'} @ ${fmt(p.entry_price)}（幣安），停損距離 ${fmt(p.sl_points)}` : '<span class="dimc">空手</span>';
+    const rows = (x.trades || []).slice(0, 30).map(t => `<tr><td>${new Date((t.signal_ts || 0) * 1000).toLocaleString("zh-TW", {hour12: false, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit"})}</td>
+      <td>${t.dir > 0 ? '<span class="up">多</span>' : t.dir < 0 ? '<span class="down">空</span>' : ""}</td>
+      <td>${t.status === "skipped" ? `<span class="dimc">略過：${esc(t.skip || "")}</span>` : esc({sent: "已送出", open: "持倉中", closed: "已平倉"}[t.status] || t.status || "")}</td>
+      <td class="mono">${fmt(t.sim_entry_price)}→${t.sim_exit_price ? fmt(t.sim_exit_price) : "–"}</td>
+      <td class="mono">${t.fill_price ? fmt(t.fill_price) : "–"}→${t.exit_price ? fmt(t.exit_price) : "–"}</td>
+      <td class="mono">${n2(t.sim_pnl_points)}</td><td class="mono">${n2(t.mt5_points)}</td>
+      <td class="mono">${n2(t.spread)}</td><td class="mono">${n2(t.entry_slip)}／${n2(t.exit_slip)}</td>
+      <td class="mono">${t.fill_ts && t.signal_ts ? (t.fill_ts - t.signal_ts) + "s" : "–"}</td><td class="mono">${n2(t.basis)}</td></tr>`).join("");
+    return `<div class="inst"><div class="t"><b>${esc(x.name)}</b><span class="dimc">${esc(x.source || "")}／${esc(x.engine_id)}</span>${feed}</div>
+      <div class="dimc" style="font-size:12.5px;margin:4px 0">對方目前：${want}</div>
+      <div class="grid">
+        <div><div class="k">已平倉（對得上模擬）</div><div class="v">${m.trades}（${m.matched}）</div></div>
+        <div><div class="k">模擬 vs MT5（點，對得上的）</div><div class="v">${n2(m.sim_points_matched)} vs ${n2(m.mt5_points_matched)}</div></div>
+        <div><div class="k">每筆差（MT5 − 模擬）</div><div class="v">${n2(m.avg_diff_points)}</div></div>
+        <div><div class="k">MT5 實際（含庫存費、佣金）</div><div class="v">${n2(m.mt5_usd)} USD（費用 ${n2(m.swap_commission_usd)}）</div></div>
+        <div><div class="k">平均點差</div><div class="v">${n2(m.avg_spread)}</div></div>
+        <div><div class="k">平均滑價 進／出</div><div class="v">${n2(m.avg_entry_slip)}／${n2(m.avg_exit_slip)}</div></div>
+        <div><div class="k">訊號→成交平均</div><div class="v">${m.avg_latency_sec === null ? "–" : m.avg_latency_sec + " 秒"}</div></div>
+        <div><div class="k">平均報價差（券商−幣安）</div><div class="v">${n2(m.avg_basis)}</div></div>
+        <div><div class="k">略過／進行中</div><div class="v">${m.skipped}／${m.open}</div></div>
+      </div>
+      <div class="scroll" style="margin-top:8px"><table><tr><th>訊號</th><th></th><th>狀態</th><th>模擬（幣安）</th><th>MT5 成交</th><th>模擬點</th><th>MT5點</th><th>點差</th><th>滑價 進／出</th><th>延遲</th><th>報價差</th></tr>${rows}</table></div></div>`;
+  }).join("");
+}
+
+load(); loadExt(); setInterval(load, 5000); setInterval(loadExt, 15000);
 </script>
 </body>
 </html>

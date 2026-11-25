@@ -4,6 +4,7 @@ import os
 
 DATA_DIR = os.getenv("DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "data"))
 EA_TOKEN = os.getenv("EA_TOKEN", "")                 # EA 連線用的密鑰（MT5 EA 參數要填一樣的）
+EXT_TOKEN = os.getenv("EXT_TOKEN", "")               # 外部訊號（例如 gold-scalper）回報部位用的密鑰；沒設就不收
 LIVE_PASSWORD = os.getenv("LIVE_PASSWORD", "")       # 儀表板密碼
 TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN", "")
 TG_CHAT_ID = os.getenv("TG_CHAT_ID", "")
@@ -24,6 +25,12 @@ def load_instances():
         it.setdefault("align", "session")
         it.setdefault("safety_units", 3.0)
         it.setdefault("enabled", True)
+        if it.get("strategy") == "external":            # 外部訊號：策略在別的服務跑（app/ext.py）
+            if not it.get("engine_id"):
+                raise ValueError(f"instances.json 外部訊號策略 {it['id']} 要填 engine_id")
+            it.setdefault("stale_sec", 180)
+            it.setdefault("max_entry_delay_sec", 300)
+            it.setdefault("safety_mult", 2.0)
         if it["magic"] in seen_magic or it["id"] in seen_id:
             raise ValueError(f"instances.json 重複的 id 或 magic：{it['id']} / {it['magic']}")
         seen_magic.add(it["magic"]); seen_id.add(it["id"])

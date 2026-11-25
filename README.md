@@ -12,6 +12,7 @@ Coolify（這個服務）  ⇄  HTTPS  ⇄  MT5 裡的 TzujenBridge EA  →  券
 ## 目前跑的策略（instances.json）
 | id | 商品 | 策略 | K | 手數 | magic | 狀態 |
 |---|---|---|---|---|---|---|
+| gold_chan15 | XAUUSD | 外部訊號：gold-scalper lab 15 分K 纏論（窄中樞） | 15 分 | 0.01 | 900015 | 前瞻＋量點差滑價 |
 | jp_gy25 | JPN225 | GuYuan_2025（預設參數） | 20 分 | 0.1 | 225025 | 主力 |
 | nas_gy25_60 | NAS100 | GuYuan_2025（預設參數） | 60 分 | 0.1 | 100060 | 主力（2022 空頭仍獲利，和日經互補） |
 | nas_gy24s | NAS100 | GuYuan_2024_S（WIN 2、MA2 100、EBX 2） | 60 分 | 0.1 | 100024 | 空方（2022 +19%），前瞻測試 |
@@ -26,11 +27,29 @@ magic 保留著不要給別支用。直接刪掉的話，它的持倉會變成�
 同一商品可以同時跑多支（例如上面兩支日經）：帳戶要是 **Hedge（對沖）** 模式，各支用自己的 magic 管理持倉、掛單、成交，
 互不干擾（`tests/test_two_instances.py`）。Netting（淨額）帳戶不行，同商品的部位會合併。
 
+## 外部訊號：黃金（gold-scalper）
+`gold_chan15`（XAUUSD、0.01 手＝1 盎司、magic 900015）不是這裡的策略：訊號由 gold-scalper **lab** 的 15 分K 纏論引擎
+（`chan_profile_900`，窄中樞前瞻測試那支）用幣安 XAUUSDT 算，這裡只照著在 MT5 下單，目的是**量出換到 MT5 之後的真實差異**。
+
+- gold-scalper 每 20 秒、以及部位一有變化，POST「我現在的部位」到 `/ext/gold-scalper`（header `x-token` = `EXT_TOKEN`）。
+- 這裡每次 EA 同步就對一次（`app/ext.py`）：對方有新部位 → 市價進場；對方空手或換了一筆 → 市價平倉。
+  做過的 key 不會再做，所以重啟、重送、亂序都不會重複下單。
+- 進場附**安全停損**＝進場報價 ∓ 對方停損距離 × 2，只防斷線；停損、移動停損都由對方決定（對方平倉 → 這裡平倉）。
+- 對方 3 分鐘沒回報 → 不進新倉、不主動平倉、警示一次。訊號收到時已過 5 分鐘 → 不追，記「略過」。
+- 儀表板「外部訊號：模擬 vs MT5」：每筆的模擬（幣安）與 MT5 成交、點差、進出場滑價（成交價比下單當下報價差多少）、
+  訊號到成交的延遲、券商與幣安的報價差；上面是合計與平均。`/api/ext` 是同樣的資料。
+- 0.01 手 = 1 盎司，1 點 = 1 美元，跟 gold-scalper 的點數直接對得起來。
+- **模擬帳戶的成交通常比真實帳戶理想**：這裡量得到點差、報價差、延遲和整條流程，量不到真實的滑價。
+- 只有外部訊號用的商品（XAUUSD），第一次連線只要 2 天 K 棒，不回補 60 天。
+- 測試：`tests/test_ext.py`（開倉帶安全停損、重送不重複、平倉與模擬單補進對照、做過的 key 不重開、太晚不追、
+  換倉、斷訊不進場只警示一次、券商端停損、緊急停止後不重開、對照表、只要 2 天報價、/ext 密鑰與 404、對帳略過外部訊號）。
+
 ## 部署（Coolify）
 1. 新 GitHub repo（不要跟 us-index-lab 放一起，改回測室才不會重啟實盤）
 2. Coolify 新增服務、選 Dockerfile，網域例如 `cfd.tzujenlab.com`
 3. Persistent Storage 掛 volume 到 `/data`
-4. 環境變數照 `.env.example`：`EA_TOKEN`（自己產生一串長亂碼）、`LIVE_PASSWORD`、`TG_BOT_TOKEN`、`TG_CHAT_ID`
+4. 環境變數照 `.env.example`：`EA_TOKEN`（自己產生一串長亂碼）、`LIVE_PASSWORD`、`TG_BOT_TOKEN`、`TG_CHAT_ID`、
+   `EXT_TOKEN`（外部訊號用，另一串長亂碼）
 5. 埠號 8080，健康檢查 `/healthz`
 
 ## MT5 端（Windows VPS）

@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 
-from . import alerts, config, db, live, recon, sync
+from . import alerts, config, db, ext, live, recon, sync
 
 HERE = os.path.dirname(__file__)
 app = FastAPI(title="cfd-live")
@@ -21,6 +21,10 @@ _sync_lock = threading.Lock()
 async def auth(request: Request, call_next):
     path = request.url.path
     if path == "/healthz":
+        return await call_next(request)
+    if path.startswith("/ext/"):
+        if not config.EXT_TOKEN or not secrets.compare_digest(request.headers.get("x-token", ""), config.EXT_TOKEN):
+            return Response("bad token", status_code=401)
         return await call_next(request)
     if path.startswith("/ea/"):
         if not config.EA_TOKEN or not secrets.compare_digest(request.headers.get("x-token", ""), config.EA_TOKEN):
@@ -53,6 +57,27 @@ async def ea_sync(request: Request):
         with _sync_lock:
             return sync.handle(payload)
     return PlainTextResponse(await run_in_threadpool(run))
+
+
+@app.post("/ext/{source}")
+async def ext_post(source: str, request: Request):
+    """外部訊號回報「我現在的部位」（例如 gold-scalper 的 lab 15 分K 引擎）"""
+    payload = json.loads((await request.body()).decode("utf-8", "replace"))
+    payload["source"] = payload.get("source") or source
+    inst = ext.match_instance(sync.config_instances(), payload)
+    if inst is None:
+        raise HTTPException(404, f"instances.json 沒有 engine_id={payload.get('engine_id')} 的外部訊號策略")
+
+    def run():
+        with _sync_lock:
+            return ext.receive(inst, payload)
+    return await run_in_threadpool(run)
+
+
+@app.get("/api/ext")
+def api_ext():
+    """外部訊號策略：模擬 vs MT5 逐筆對照、平均點差／滑價／延遲"""
+    return [ext.report(i) for i in sync.config_instances() if i.get("strategy") == "external"]
 
 
 # ------------------------------------------------------------------ 儀表板

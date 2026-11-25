@@ -13,7 +13,7 @@ import traceback
 
 import numpy as np
 
-from . import alerts, config, db, live, timeconv as T
+from . import alerts, config, db, ext, live, timeconv as T
 
 RETRY_CODES = {10018}          # TRADE_RETCODE_MARKET_CLOSED：休市中，一分鐘後再試
 OK_CODES = {10008, 10009, 10010}   # PLACED、DONE、DONE_PARTIAL
@@ -152,17 +152,23 @@ def handle(p, now=None):
         paused = set(db.kv_get("paused", []))
         for inst in instances:
             try:
-                live.process_instance(inst, now, snap, paused=inst["id"] in paused)
+                if inst.get("strategy") == "external":
+                    ext.process(inst, now, snap, paused=inst["id"] in paused)
+                else:
+                    live.process_instance(inst, now, snap, paused=inst["id"] in paused)
             except Exception as e:
                 _err_once(f"proc:{inst['id']}", f"{inst['name']} 策略執行錯誤：{e}\n{traceback.format_exc()[-600:]}", inst["id"])
         checks(snap, now, instances)
 
     lines = [f"OK|{now}|{1 if kill else 0}"]
     syms = sorted({i["broker_symbol"] for i in instances})
+    ext_only = {i["broker_symbol"] for i in instances if i.get("strategy") == "external"} - \
+        {i["broker_symbol"] for i in instances if i.get("strategy") != "external"}
     for sym in syms:
         r = db.q("SELECT MAX(ts) FROM bars WHERE symbol=?", (sym,))
         last = r[0][0] if r and r[0][0] else None
-        since = T.utc2srv(last) if last else T.utc2srv(now - config.BACKFILL_DAYS * 86400)
+        days = 2 if sym in ext_only else config.BACKFILL_DAYS      # 外部訊號只要報價，不用回補 60 天 K 棒
+        since = T.utc2srv(last) if last else T.utc2srv(now - days * 86400)
         lines.append(f"S|{sym}|{since}")
     rows = db.q("SELECT id, op, payload FROM actions WHERE status='queued' AND not_before<=? ORDER BY id", (now,))
     for aid, op, payload in rows:

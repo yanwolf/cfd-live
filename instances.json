@@ -1,5 +1,22 @@
 [
   {
+    "id": "gold_chan15",
+    "name": "黃金 15分K 纏論（gold-scalper lab，外部訊號）",
+    "symbol": "XAUUSD",
+    "broker_symbol": "XAUUSD",
+    "strategy": "external",
+    "source": "gold-scalper",
+    "engine_id": "chan_profile_900",
+    "lots": 0.01,
+    "contract_size": 100,
+    "magic": 900015,
+    "tick_size": 0.01,
+    "safety_mult": 2.0,
+    "max_entry_delay_sec": 300,
+    "stale_sec": 180,
+    "enabled": true
+  },
+  {
     "id": "jp_gy24",
     "name": "日經 GuYuan_2024（對照組）",
     "symbol": "JP225",

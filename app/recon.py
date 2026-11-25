@@ -137,6 +137,8 @@ def _row(t, b, spread):
 def reconcile_all(instances, now=None):
     out = []
     for inst in instances:
+        if inst.get("strategy") == "external":          # 外部訊號沒有回測可對，另外看 /api/ext
+            continue
         if not inst.get("enabled", True) and not db.q("SELECT 1 FROM deals WHERE magic=? LIMIT 1", (int(inst["magic"]),)):
             continue
         try:
