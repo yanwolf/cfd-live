@@ -54,6 +54,12 @@
 <main>
   <div class="panel"><div class="grid" id="acct"></div></div>
   <div class="panel"><h2>目前持倉</h2><div id="possum"></div></div>
+  <div class="panel">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">績效統計</h2><span style="flex:1"></span>
+      <span class="dimc" style="font-size:12.5px">起算</span><input id="pfstart" type="date" style="font:inherit;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:5px 8px">
+      <button class="sec" id="pfbtn">重新整理</button></div>
+    <div id="perf" style="margin-top:8px"><div class="dimc">載入中…</div></div>
+  </div>
   <div class="panel"><h2>策略</h2><div id="insts"></div></div>
   <div class="panel">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">實盤 vs 回測</h2><span style="flex:1"></span>
@@ -151,6 +157,59 @@ async function load() {
       const st = x.status === "failed" ? `<span class="up">失敗 ${r ? esc(r.retcode + " " + (r.msg || "")) : ""}</span>` : x.status === "done" ? '<span class="down">完成</span>' : esc(x.status);
       return `<tr><td>${x.id}</td><td class="l">${tstr(x.created)}</td><td class="l">${esc(x.inst)}</td><td class="l">${esc(x.op)}</td><td class="l">${esc(desc)}</td><td class="l">${st}</td></tr>`; }).join("");
 }
+// ---------------------------------------------------------------- 績效統計
+const PF_COLORS = ["#d4a73a", "#7fb3ff", "#b48cff", "#4fd1c5", "#f08a5d", "#c7c7c7", "#e07ab8", "#9ad06b"];
+function multiSVG(series, h = 220) {
+  const all = series.flatMap(s => s.pts); if (!all.length) return '<div class="dimc">尚無已平倉交易</div>';
+  const t0 = Math.min(...all.map(p => p.t)), t1 = Math.max(PERF.now, ...all.map(p => p.t)), w = 680;
+  const vs = all.map(p => p.eq), mn = Math.min(0, ...vs), mx = Math.max(0, ...vs), rg = (mx - mn) || 1;
+  const X = t => t1 === t0 ? w / 2 : (t - t0) / (t1 - t0) * w, Y = v => h - 8 - (v - mn) / rg * (h - 16);
+  const paths = series.map(s => { if (!s.pts.length) return "";
+    let d = `M0,${Y(0).toFixed(1)}`; s.pts.forEach(p => d += `H${X(p.t).toFixed(1)}V${Y(p.eq).toFixed(1)}`); d += `H${w}`;
+    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.w || 1.6}"/>`; }).join("");
+  const day = t => new Date(t * 1000).toLocaleDateString("zh-TW");
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:${h}px;display:block">
+    <line x1="0" y1="${Y(0).toFixed(1)}" x2="${w}" y2="${Y(0).toFixed(1)}" stroke="#2c3543"/>${paths}</svg>
+    <div style="display:flex;justify-content:space-between;color:var(--dim);font-size:11px"><span>${day(t0)}</span><span>${day(t1)}</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;margin-top:6px">${series.map(s => `<span><span style="display:inline-block;width:14px;height:3px;background:${s.color};vertical-align:middle;margin-right:5px"></span>${esc(s.name)}</span>`).join("")}</div>`;
+}
+let PERF = null;
+async function loadPerf() {
+  const st = $("#pfstart").value;
+  const q = st ? "?start=" + Math.floor(new Date(st + "T00:00:00").getTime() / 1000) : "";
+  try { PERF = await api("/api/perf" + q); } catch (e) { $("#perf").innerHTML = `<div class="up">${esc(e.message)}</div>`; return; }
+  if (!st && PERF.start) $("#pfstart").value = new Date(PERF.start * 1000).toLocaleDateString("sv-SE");
+  const a = PERF.account, cur = PERF.currency, S = PERF.strategies;
+  const tile = (k, v) => `<div><div class="k">${k}</div><div class="v" style="font-size:18px">${v}</div></div>`;
+  const money = v => v === null || v === undefined ? "–" : sgn(v);
+  const series = S.filter(x => x.curve.length).map((x, i) => ({name: x.name, color: PF_COLORS[i % PF_COLORS.length], pts: x.curve}));
+  const d = t => t ? new Date(t * 1000).toLocaleString("zh-TW", {hour12: false, month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"}) : "–";
+  $("#perf").innerHTML = `
+    <div class="inst"><div class="t"><b>帳戶合計（已實現，${esc(cur)}）</b><span class="dimc">自 ${PERF.start ? new Date(PERF.start * 1000).toLocaleDateString("zh-TW") : "–"}</span></div>
+      <div class="grid">${tile("已實現損益", money(a.net_money))}${tile("平倉筆數", a.closes)}${tile("勝率", a.win_rate === null ? "–" : a.win_rate + "%")}
+        ${tile("最大回撤", a.max_dd ? `<span class="down">${fmt(a.max_dd)}</span>` : "0")}${tile("持倉中", a.open_n ? `${a.open_n} 筆　浮動 ${money(a.floating)}` : "空手")}
+        ${tile("帳戶淨值", fmt(a.equity))}</div>
+      <div style="margin-top:10px">${multiSVG([{name: "帳戶合計", color: a.net_money >= 0 ? "#e5484d" : "#2fb36b", pts: a.curve, w: 2.4}])}</div>
+      <div class="dimc" style="font-size:12.5px;margin-top:6px">金額 = 券商損益 + 隔夜利息 + 手續費，已含點差與滑價。各策略持倉獨立（Hedge），帳戶合計就是各策略相加。</div></div>
+    <div class="inst"><div class="t"><b>各策略</b></div>
+      ${multiSVG(series, 200)}
+      <div class="scroll" style="margin-top:10px"><table><tr><th class="l">策略</th><th class="l">商品</th><th>起</th><th>交易</th><th>淨損益</th><th>點數</th><th>勝率</th><th>PF</th><th>平均</th><th>最大回撤</th><th class="l">目前</th></tr>
+      ${S.map(x => `<tr><td class="l">${esc(x.name)}${x.enabled ? "" : ' <span class="dimc">（停用）</span>'}</td><td class="l">${esc(x.symbol)}</td>
+        <td>${x.first ? new Date(x.first * 1000).toLocaleDateString("zh-TW", {month: "2-digit", day: "2-digit"}) : "–"}</td><td>${x.trades}</td>
+        <td>${money(x.net_money)}</td><td>${x.trades ? sgn(x.net_pts, 1) : "–"}</td><td>${x.win_rate === null ? "–" : x.win_rate + "%"}</td>
+        <td>${x.pf === null ? "–" : fmt(x.pf)}</td><td>${money(x.avg_money)}</td><td>${x.max_dd ? fmt(x.max_dd) : "–"}</td>
+        <td class="l">${x.open.length ? x.open.map(o => `${o.side === "多" ? '<span class="up">多</span>' : '<span class="down">空</span>'} @ ${fmt(o.price)} ${money(o.profit)}`).join("、") : '<span class="dimc">空手</span>'}</td></tr>`).join("")}
+      </table></div>
+      <div class="dimc" style="font-size:12.5px;margin-top:6px">點數 = 出場價 − 進場價（依方向），不同商品的點數不能直接相加，比較請看金額。交易筆數少的時候勝率、PF 參考價值有限。</div></div>
+    ${S.filter(x => x.last.length).map(x => `<details class="inst"><summary style="cursor:pointer"><b class="gold">${esc(x.name)}</b> <span class="dimc">最近 ${x.last.length} 筆</span></summary>
+      <div class="scroll" style="margin-top:8px"><table><tr><th class="l">進場</th><th class="l">出場</th><th>方向</th><th>手數</th><th>進</th><th>出</th><th>點數</th><th>利息</th><th>損益</th></tr>
+      ${x.last.map(t => `<tr><td class="l">${d(t.entry_ts)}</td><td class="l">${d(t.exit_ts)}</td><td>${t.dir > 0 ? '<span class="up">多</span>' : '<span class="down">空</span>'}</td>
+        <td>${t.vol}</td><td>${fmt(t.entry)}</td><td>${fmt(t.exit)}</td><td>${sgn(t.pts)}</td><td>${t.swap ? sgn(t.swap) : ""}</td><td>${sgn(t.money)}</td></tr>`).join("")}</table></div></details>`).join("")}`;
+}
+$("#pfbtn").onclick = loadPerf;
+$("#pfstart").onchange = loadPerf;
+loadPerf(); setInterval(loadPerf, 60000);
+
 let RECON = null;
 const ago = s => s === null || s === undefined ? "–" : (Math.abs(s) < 120 ? `${s > 0 ? "+" : ""}${s} 秒` : `${s > 0 ? "+" : ""}${Math.round(s / 60)} 分`);
 const slip = v => v === null || v === undefined ? "–" : `<span class="${v > 0 ? "warn" : ""}">${v > 0 ? "+" : ""}${fmt(v, 2)}</span>`;

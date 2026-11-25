@@ -117,6 +117,13 @@ def status():
             "events": alerts.recent(60), "tg": alerts.tg_status()}
 
 
+@app.get("/api/perf")
+async def api_perf(start: int = 0):
+    """實盤績效：各策略（magic）與帳戶合計，從券商成交重算"""
+    from . import perf
+    return await run_in_threadpool(perf.compute, sync.config_instances(), start or None)
+
+
 @app.get("/api/recon")
 async def api_recon():
     """實盤 vs 回測逐筆對帳（每支策略從它開始跑的時間起算）"""
