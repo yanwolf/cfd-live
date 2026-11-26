@@ -90,6 +90,27 @@
     "enabled": true
   },
   {
+    "id": "us_arx_new",
+    "name": "標普 AR_crossover 新出場（4／8／0.8／1.6 × AvgRange(200)）",
+    "symbol": "US500",
+    "broker_symbol": "US500",
+    "strategy": "AR_crossover",
+    "minutes": 60,
+    "align": "session",
+    "params": {
+      "UNIT_N": 200,
+      "LOSS": 4,
+      "WIN": 8,
+      "Twin": 0.8,
+      "Tstop": 1.6
+    },
+    "lots": 0.1,
+    "magic": 500011,
+    "tick_size": 0.1,
+    "safety_units": 6.0,
+    "enabled": true
+  },
+  {
     "id": "jp_gy24_w9",
     "name": "日經 GuYuan_2024 WIN9（已停用）",
     "symbol": "JP225",
