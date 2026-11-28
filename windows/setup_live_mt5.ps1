@@ -35,10 +35,14 @@ if (-not (Test-Path (Join-Path $dst 'terminal64.exe'))) {
 } else { Write-Host "$dst 已經存在，略過複製" }
 
 # 3) 桌面捷徑
-$lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'MT5 實盤.lnk'
-$ws = New-Object -ComObject WScript.Shell
-$sc = $ws.CreateShortcut($lnk); $sc.TargetPath = Join-Path $dst 'terminal64.exe'; $sc.WorkingDirectory = $dst; $sc.Save()
-Write-Host "桌面捷徑：$lnk" -ForegroundColor Green
+# 捷徑檔名用英文：WScript.Shell 在部分 Windows 上存不了中文檔名
+$lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'MT5 LIVE.lnk'
+try {
+    $ws = New-Object -ComObject WScript.Shell
+    $sc = $ws.CreateShortcut($lnk); $sc.TargetPath = Join-Path $dst 'terminal64.exe'; $sc.WorkingDirectory = $dst; $sc.Save()
+} catch { }
+if (Test-Path $lnk) { Write-Host "桌面捷徑：$lnk" -ForegroundColor Green }
+else { Write-Host "桌面捷徑建立失敗（不影響）：直接開 $dst\terminal64.exe 即可" -ForegroundColor Yellow }
 
 # 4) 開一次，讓 MT5 建立自己的資料夾，再把 EA 裝進去並編譯
 $data = $null
@@ -55,7 +59,7 @@ if (-not $data) {
         }
     }
 }
-if (-not $data) { Write-Host '等不到 MT5 建立資料夾。請手動開「MT5 實盤」捷徑一次，再執行 install_ea.cmd。' -ForegroundColor Red; Pause-Exit 1 }
+if (-not $data) { Write-Host '等不到 MT5 建立資料夾。請手動開 C:\MT5-Live\terminal64.exe 一次，再執行 install_ea.cmd。' -ForegroundColor Red; Pause-Exit 1 }
 
 $ea = Join-Path $PSScriptRoot 'TzujenBridge.mq5'
 if (-not (Test-Path $ea)) { $ea = Join-Path (Split-Path $PSScriptRoot -Parent) 'ea\TzujenBridge.mq5' }
@@ -68,7 +72,7 @@ if (Test-Path (Join-Path $exp 'TzujenBridge.ex5')) { Write-Host 'EA 已裝進實
 else { Write-Host 'EA 編譯失敗，請截圖給 Claude' -ForegroundColor Red }
 
 Write-Host ''
-Write-Host '接下來在「MT5 實盤」裡做：' -ForegroundColor Cyan
+Write-Host '接下來在實盤 MT5（桌面「MT5 LIVE」或 C:\MT5-Live\terminal64.exe）裡做：' -ForegroundColor Cyan
 Write-Host '  1. 檔案 → 登入交易帳戶：填實盤帳號、密碼，伺服器選 Pepperstone 的實盤伺服器（Live）'
 Write-Host '  2. 工具 → 選項 → EA交易：勾「允許演算法交易」、「允許 WebRequest 的網址」，加入實盤服務網址（例如 https://cfd-real.tzujenlab.com）'
 Write-Host '  3. 開一張任意圖表，把 TzujenBridge 拖上去，參數：'

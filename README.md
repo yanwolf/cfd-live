@@ -77,7 +77,8 @@ EA 參數 `AllowLive` 預設 false：**在真實帳戶上不會開新倉**，要
 | `ACCOUNT_MAX_DD_USD` | `500`（帳戶 2000 美元的 25%；所有策略已實現回撤超過就全部暫停進場，網頁可改） |
 | `EXT_TOKEN` | 不用設（實盤沒有外部訊號） |
 
-**MT5**：在 VPS 上雙擊 `windows/setup_live_mt5.cmd` → 複製一份 Pepperstone MT5 到 `C:\MT5-Live`、建桌面捷徑「MT5 實盤」、裝好 EA。
+**MT5**：在 VPS 上雙擊 `windows/setup_live_mt5.cmd` → 複製一份 Pepperstone MT5 到 `C:\MT5-Live`、建桌面捷徑「MT5 LIVE」、裝好 EA。
+VPS 重開機自動啟動：雙擊 `windows/autostart_mt5.cmd`（兩個 MT5 都加進啟動資料夾，已經有的略過）。
 登入實盤帳戶後，EA 參數 `ServerURL` = 實盤網址、`Token` = 實盤的 `EA_TOKEN`、**`AllowLive = true`**。模擬倉的 MT5 照常開著。
 
 **instances.live.json**：那指 GY25 60 分、那指 GY24_S、黃金 GY25 90 分（`start_paused`：第一次上線先暫停進場，要跑在網頁按「恢復進場」）。
