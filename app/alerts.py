@@ -17,7 +17,7 @@ def event(level, msg, inst=None, notify=None):
         notify = level in ("trade", "warn", "error")
     if notify:
         prefix = {"trade": "🟡", "warn": "⚠️", "error": "🚨"}.get(level, "")
-        tg(f"{prefix} {msg}")
+        tg(f"{config.TG_PREFIX}{prefix} {msg}")
 
 
 # ---------------------------------------------------------------- Telegram（寄件匣：先寫進資料庫再送，失敗會重試）

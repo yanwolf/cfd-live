@@ -153,7 +153,8 @@ async def api_review():
 def api_review_set(body: dict):
     """網頁修改檢討條件：{id, cfg}；cfg = null → 恢復 instances.json 的設定"""
     from . import review
-    inst = next((i for i in sync.config_instances() if i["id"] == body.get("id")), None)
+    inst = review.ACC if body.get("id") == review.ACC_ID else \
+        next((i for i in sync.config_instances() if i["id"] == body.get("id")), None)
     if not inst:
         return Response("找不到這支策略", status_code=404)
     try:

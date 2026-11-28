@@ -1,0 +1,83 @@
+[
+  {
+    "id": "nas_gy25_60",
+    "name": "那指 GuYuan_2025 60 分",
+    "symbol": "NAS100",
+    "broker_symbol": "NAS100",
+    "strategy": "GuYuan_2025",
+    "minutes": 60,
+    "align": "session",
+    "params": {},
+    "lots": 0.1,
+    "magic": 100060,
+    "tick_size": 0.1,
+    "safety_units": 3.0,
+    "enabled": true,
+    "review": {
+      "max_consec_loss": 18,
+      "min_pf50": 0.55,
+      "max_dd_pts": 2000,
+      "action": "pause",
+      "basis": "回測 Pepperstone 2018–2026（812 筆）：最多連虧 18、50 筆 PF 最低 0.56、最大回撤 1,322 點（取 1.5 倍）。0.1 手 ≈ 200 美元＝帳戶 2000 的 10%"
+    }
+  },
+  {
+    "id": "nas_gy24s",
+    "name": "那指 GuYuan_2024_S（空）",
+    "symbol": "NAS100",
+    "broker_symbol": "NAS100",
+    "strategy": "GuYuan_2024_S",
+    "minutes": 60,
+    "align": "session",
+    "params": {
+      "N1": 3,
+      "N2": 3,
+      "N3": 5,
+      "HH": 10,
+      "LL": 14,
+      "LOSS": 1.1,
+      "WIN": 2,
+      "Twin": 0.3,
+      "Tstop": 3.3,
+      "MA1": 1,
+      "MA2": 100,
+      "EBX": 2
+    },
+    "lots": 0.1,
+    "magic": 100024,
+    "tick_size": 0.1,
+    "safety_units": 3.0,
+    "enabled": true,
+    "review": {
+      "max_consec_loss": 10,
+      "min_pf50": 0.55,
+      "max_dd_pts": 2600,
+      "action": "pause",
+      "basis": "回測 Pepperstone 2018–2026（約 1,050 筆）：最多連虧 8、50 筆 PF 最低 0.56、最大回撤 1,715 點（取 1.5 倍）。0.1 手 ≈ 260 美元＝帳戶的 13%"
+    }
+  },
+  {
+    "id": "gold_gy25_90",
+    "name": "黃金 GuYuan_2025 90 分",
+    "symbol": "XAUUSD",
+    "broker_symbol": "XAUUSD",
+    "strategy": "GuYuan_2025",
+    "minutes": 90,
+    "align": "session",
+    "params": {},
+    "lots": 0.01,
+    "contract_size": 100,
+    "magic": 900025,
+    "tick_size": 0.01,
+    "safety_units": 3.0,
+    "enabled": true,
+    "review": {
+      "max_consec_loss": 17,
+      "min_pf50": 0.45,
+      "max_dd_pts": 600,
+      "action": "pause",
+      "basis": "回測 Dukascopy 2018–2026（599 筆）：最多連虧 17、50 筆 PF 最低 0.44、最大回撤 390 點（取 1.5 倍）。0.01 手 ≈ 600 美元＝帳戶的 30%"
+    },
+    "start_paused": true
+  }
+]

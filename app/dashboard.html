@@ -258,7 +258,7 @@ async function loadReview() {
   if (document.querySelector("#review .rv.editing")) return;          // 正在編輯就不要刷新蓋掉
   const dg = k => k === "min_pf50" ? 2 : 0;
   const cell = r => {
-    const v = r.value === null || r.value === undefined ? "–" : fmt(r.value, dg(r.key));
+    const v = r.value === null || r.value === undefined ? "–" : fmt(r.value, dg(r.key));  // 
     const cls = r.hit ? "up" : r.near ? "warn" : "";
     return `<span class="${cls}">${v}${r.unit}</span><span class="dimc">／${r.key === "min_pf50" ? "＜" : "＞"}${fmt(r.limit, dg(r.key))}${r.unit}${r.hit ? "　已觸發" : r.near ? "　接近" : ""}</span>`;
   };
@@ -267,10 +267,8 @@ async function loadReview() {
     const val = k => c[k] === undefined || c[k] === null ? "" : c[k];
     const summary = x.configured ? `<div class="grid" style="margin-top:6px">
         <div><div class="k">已平倉${x.since ? `（${esc(x.since)} 起）` : ""}</div><div class="v">${x.metrics.n}</div></div>
-        <div><div class="k">連續虧損</div><div class="v" style="font-size:15px">${by("max_consec_loss") ? cell(by("max_consec_loss")) : "–"}</div></div>
-        <div><div class="k">最近 50 筆 PF</div><div class="v" style="font-size:15px">${by("min_pf50") ? cell(by("min_pf50")) : "–"}</div></div>
-        <div><div class="k">最大回撤（點）</div><div class="v" style="font-size:15px">${by("max_dd_pts") ? cell(by("max_dd_pts")) : "–"}</div></div>
-        <div><div class="k">觸發後</div><div class="v" style="font-size:15px">${x.action === "pause" ? "暫停進場＋通知" : "只通知"}</div></div></div>`
+        ${x.rules.map(r => `<div><div class="k">${esc(r.label)}</div><div class="v" style="font-size:15px">${cell(r)}</div></div>`).join("")}
+        <div><div class="k">觸發後</div><div class="v" style="font-size:15px">${x.id === "_account" ? (x.action === "pause" ? "暫停所有策略＋通知" : "只通知") : (x.action === "pause" ? "暫停進場＋通知" : "只通知")}</div></div></div>`
       : '<div class="dimc" style="margin-top:4px">未設定（不檢查）</div>';
     return `<div class="inst rv" data-id="${esc(x.id)}"><div class="t"><b class="gold">${esc(x.name)}</b>
         <span class="dimc" style="font-size:12px">${x.source === "網頁" ? "網頁修改過" : (x.configured ? "設定檔" : "")}</span>
@@ -278,10 +276,8 @@ async function loadReview() {
       ${summary}${x.basis ? `<div class="dimc" style="font-size:12.5px;margin-top:6px">依據：${esc(x.basis)}</div>` : ""}
       <div class="rvform" style="display:none">
         <div class="rvgrid">
-          <div><label>連續虧損超過（筆）</label><input name="max_consec_loss" type="number" min="1" step="1" value="${val("max_consec_loss")}" placeholder="空白＝不檢查"></div>
-          <div><label>最近 50 筆 PF 低於</label><input name="min_pf50" type="number" min="0.01" step="0.01" value="${val("min_pf50")}" placeholder="空白＝不檢查"></div>
-          <div><label>最大回撤超過（點）</label><input name="max_dd_pts" type="number" min="1" step="1" value="${val("max_dd_pts")}" placeholder="空白＝不檢查"></div>
-          <div><label>觸發後</label><select name="action"><option value="pause"${x.action === "pause" ? " selected" : ""}>暫停進場＋通知</option><option value="alert"${x.action === "alert" ? " selected" : ""}>只通知</option></select></div>
+          ${(x.form || []).map(f => `<div><label>${esc(f.label)}</label><input name="${f.key}" type="number" min="0" step="${f.step}" value="${val(f.key)}" placeholder="空白＝不檢查"></div>`).join("")}
+          <div><label>觸發後</label><select name="action"><option value="pause"${x.action === "pause" ? " selected" : ""}>${x.id === "_account" ? "暫停所有策略＋通知" : "暫停進場＋通知"}</option><option value="alert"${x.action === "alert" ? " selected" : ""}>只通知</option></select></div>
           <div><label>從哪天的進場開始算</label><input name="since" type="date" value="${val("since")}"></div>
         </div>
         <div style="margin-top:8px"><label style="font-size:12px;color:var(--dim)">依據（為什麼訂這個數字，觸發時會一起通知）</label><input name="basis" value="${esc(val("basis"))}"></div>

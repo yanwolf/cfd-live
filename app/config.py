@@ -12,6 +12,8 @@ SERVER_TZ = os.getenv("SERVER_TZ", "nyclose")       # 券商伺服器時區：ny
 LOOKBACK_DAYS = int(os.getenv("LOOKBACK_DAYS", "60"))   # 算指標用的 1 分 K 天數
 BACKFILL_DAYS = int(os.getenv("BACKFILL_DAYS", "60"))   # 第一次連線時向 EA 要多少天歷史
 HEARTBEAT_ALERT_SEC = int(os.getenv("HEARTBEAT_ALERT_SEC", "180"))
+TG_PREFIX = os.getenv("TG_PREFIX", "")                # Telegram 前綴，例如「【實盤】」，同一個群組收兩套服務時分得出來
+ACCOUNT_MAX_DD_USD = float(os.getenv("ACCOUNT_MAX_DD_USD", "0") or 0)   # 帳戶合計已實現回撤（美元）檢討門檻，0 = 不檢查（網頁可改）
 INSTANCES_FILE = os.getenv("INSTANCES_FILE", os.path.join(os.path.dirname(os.path.dirname(__file__)), "instances.json"))
 
 

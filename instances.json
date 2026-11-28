@@ -94,7 +94,14 @@
     "magic": 100024,
     "tick_size": 0.1,
     "safety_units": 3.0,
-    "enabled": true
+    "enabled": true,
+    "review": {
+      "max_consec_loss": 10,
+      "min_pf50": 0.55,
+      "max_dd_pts": 2600,
+      "action": "pause",
+      "basis": "回測 Pepperstone 2018–2026（約 1,050 筆）：最多連虧 8、50 筆 PF 最低 0.56、最大回撤 1,715 點（取 1.5 倍）"
+    }
   },
   {
     "id": "us_arx_new",

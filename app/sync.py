@@ -215,6 +215,14 @@ def handle(p, now=None):
         retire_actions(snap, retired)
         paused = set(db.kv_get("paused", []))
         for inst in instances:
+            # instances 檔案裡標 start_paused 的策略：第一次出現時先暫停進場，要跑再到網頁按「恢復進場」
+            if inst.get("start_paused") and not db.kv_get(f"seen:{inst['id']}", False):
+                paused.add(inst["id"])
+                db.kv_set("paused", sorted(paused))
+                db.kv_set(f"seen:{inst['id']}", True)
+                alerts.event("info", f"{inst['name']}：新加入，先暫停進場（要開始跑請按「恢復進場」）", inst["id"], notify=False)
+            elif not db.kv_get(f"seen:{inst['id']}", False):
+                db.kv_set(f"seen:{inst['id']}", True)
             try:
                 if inst.get("strategy") == "external":
                     ext.process(inst, now, snap, paused=inst["id"] in paused)

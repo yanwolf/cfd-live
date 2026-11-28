@@ -62,6 +62,27 @@ magic 保留著不要給別支用。直接刪掉的話，它的持倉會變成�
 
 EA 參數 `AllowLive` 預設 false：**在真實帳戶上不會開新倉**，要上真倉時才改 true。
 
+## 實盤（第二套服務，2026-11-28）
+真倉跟模擬倉分開兩套服務、兩個 MT5，同一個 repo：模擬倉照跑全部策略，實盤只跑 `instances.live.json` 裡的。
+同一支策略兩邊都在跑，可以直接比同一個訊號在模擬和真實帳戶的成交差異。
+
+**Coolify**：新增第二個服務（同一個 repo、Dockerfile），網域例如 `cfd-real.tzujenlab.com`，**另外掛一個 volume 到 `/data`**（不能跟模擬倉共用），環境變數：
+| 變數 | 值 |
+|---|---|
+| `INSTANCES_FILE` | `/app/instances.live.json` |
+| `EA_TOKEN` | 新的一串長亂碼（不要跟模擬倉一樣，接錯服務才不會下錯帳戶） |
+| `LIVE_PASSWORD` | 一定要設：儀表板的緊急停止、暫停、檢討條件都能改東西 |
+| `TG_BOT_TOKEN`、`TG_CHAT_ID` | 可以跟模擬倉同一個群組 |
+| `TG_PREFIX` | `【實盤】`（同一個群組才分得出是哪一套） |
+| `ACCOUNT_MAX_DD_USD` | `500`（帳戶 2000 美元的 25%；所有策略已實現回撤超過就全部暫停進場，網頁可改） |
+| `EXT_TOKEN` | 不用設（實盤沒有外部訊號） |
+
+**MT5**：在 VPS 上雙擊 `windows/setup_live_mt5.cmd` → 複製一份 Pepperstone MT5 到 `C:\MT5-Live`、建桌面捷徑「MT5 實盤」、裝好 EA。
+登入實盤帳戶後，EA 參數 `ServerURL` = 實盤網址、`Token` = 實盤的 `EA_TOKEN`、**`AllowLive = true`**。模擬倉的 MT5 照常開著。
+
+**instances.live.json**：那指 GY25 60 分、那指 GY24_S、黃金 GY25 90 分（`start_paused`：第一次上線先暫停進場，要跑在網頁按「恢復進場」）。
+手數跟模擬倉一樣（0.1／0.1／0.01）。各策略的檢討門檻寫在 `review`，換算成美元和佔帳戶比例寫在 `basis`。
+
 ## 在自己的 Windows 電腦先測（不用 Coolify、不用 VPS）
 1. `windows/install_ea.cmd`：安裝並編譯 EA
 2. `windows/run_local_server.cmd`：在本機啟動服務（視窗會顯示網址與 Token），瀏覽器自動開儀表板

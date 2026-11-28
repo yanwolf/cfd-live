@@ -33,7 +33,7 @@ def events():
 for i in range(40):
     trade(40 if i % 4 else -20, i)
 assert review.check([INST]) == [], review.status([INST])
-st = review.status([INST])[0]
+st = [x for x in review.status([INST]) if x["id"] == "nas"][0]
 assert st["metrics"]["pf50"] is None and st["metrics"]["consec_loss"] == 0, st["metrics"]
 
 # 連虧 6 筆（每筆 −30）→ 連虧觸發；回撤 180 點還沒到 300
@@ -57,7 +57,7 @@ review.check([INST])
 for i in range(48, 54):
     trade(-30, i)
 fired = review.check([INST])
-st = review.status([INST])[0]
+st = [x for x in review.status([INST]) if x["id"] == "nas"][0]
 print(st["metrics"], fired)
 assert "nas:max_consec_loss" in fired
 assert "nas:max_dd_pts" in fired and st["metrics"]["max_dd_pts"] > 300
@@ -65,5 +65,20 @@ assert st["metrics"]["pf50"] is not None
 
 # since：只算這天之後進場的
 INST2 = dict(INST, id="nas2", review=dict(INST["review"], since="2099-01-01"))
-assert review.status([INST2])[0]["metrics"]["n"] == 0
+assert [x for x in review.status([INST2]) if x["id"] == "nas2"][0]["metrics"]["n"] == 0
+# 帳戶合計：已實現回撤（美元）超過門檻 → 暫停所有啟用中的策略；修改會記事件
+OTHER = {"id": "gold", "name": "黃金", "magic": 900025, "enabled": True}
+db.kv_set("paused", [])
+review.set_cfg(review.ACC, {"max_dd_money": "30", "action": "pause", "basis": "帳戶 2000 的 1.5%（測試）"})
+assert any("檢討條件修改：帳戶合計" in e for e in events())
+acc = [x for x in review.status([INST, OTHER]) if x["id"] == "_account"][0]
+print(acc["metrics"], acc["rules"])
+assert acc["metrics"]["max_dd_money"] == 38.0, acc["metrics"]
+fired = review.check([INST, OTHER])
+assert "_account:max_dd_money" in fired, fired
+assert set(db.kv_get("paused", [])) >= {"nas", "gold"}, db.kv_get("paused", [])
+assert any("暫停「所有策略」" in e for e in events())
+# 網頁清空 = 不檢查
+review.set_cfg(review.ACC, {"max_dd_money": "", "action": "pause"})
+assert not [x for x in review.status([INST]) if x["id"] == "_account"][0]["configured"]
 print("OK")

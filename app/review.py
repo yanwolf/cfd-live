@@ -17,10 +17,11 @@ instances.json 每支策略可以加：
 import time
 from datetime import datetime, timezone, timedelta
 
-from . import alerts, db, recon
+from . import alerts, config, db, recon
 
 N_PF = 50
 RULES = (("max_consec_loss", "連續虧損", "筆"), ("min_pf50", f"最近 {N_PF} 筆 PF", ""), ("max_dd_pts", "最大回撤", "點"))
+ACC_RULES = (("max_dd_money", "帳戶已實現回撤", " 美元"),)
 
 
 def _since(cfg):
@@ -83,14 +84,37 @@ def _trades(inst, cfg):
 
 
 FIELDS = {"max_consec_loss": int, "min_pf50": float, "max_dd_pts": float}
+ACC_ID = "_account"
+ACC_FIELDS = {"max_dd_money": float}
+ACC = {"id": ACC_ID, "name": "帳戶合計（所有策略）", "magic": None}
+
+
+def _fields(inst_id):
+    return ACC_FIELDS if inst_id == ACC_ID else FIELDS
+
+
+def _form(inst_id):
+    """給網頁產生輸入欄位"""
+    if inst_id == ACC_ID:
+        return [{"key": "max_dd_money", "label": "已實現回撤超過（美元）", "step": 1}]
+    return [{"key": "max_consec_loss", "label": "連續虧損超過（筆）", "step": 1},
+            {"key": "min_pf50", "label": "最近 50 筆 PF 低於", "step": 0.01},
+            {"key": "max_dd_pts", "label": "最大回撤超過（點）", "step": 1}]
+
+
+def _file_cfg(inst):
+    if inst["id"] == ACC_ID:
+        return {"max_dd_money": config.ACCOUNT_MAX_DD_USD, "action": "pause",
+                "basis": f"服務環境變數 ACCOUNT_MAX_DD_USD = {config.ACCOUNT_MAX_DD_USD:g} 美元"} if config.ACCOUNT_MAX_DD_USD > 0 else {}
+    return inst.get("review") or {}
 
 
 def get_cfg(inst):
-    """網頁改過的優先，否則用 instances.json 的 review"""
+    """網頁改過的優先，否則用 instances.json 的 review（帳戶合計用環境變數）"""
     ov = (db.kv_get("review_cfg", {}) or {}).get(inst["id"])
     if ov is not None:
         return ov, "網頁"
-    return inst.get("review") or {}, "設定檔"
+    return _file_cfg(inst), "設定檔"
 
 
 def set_cfg(inst, body):
@@ -99,10 +123,10 @@ def set_cfg(inst, body):
     old, _ = get_cfg(inst)
     if body is None:
         allc.pop(inst["id"], None)
-        new = inst.get("review") or {}
+        new = _file_cfg(inst)
     else:
         new = {}
-        for k, typ in FIELDS.items():
+        for k, typ in _fields(inst["id"]).items():
             v = body.get(k)
             if v in (None, ""):
                 continue
@@ -122,15 +146,42 @@ def set_cfg(inst, body):
     db.kv_set("review_cfg", allc)
     hits = set(db.kv_get("review_hits", []) or [])
     db.kv_set("review_hits", sorted(h for h in hits if not h.startswith(inst["id"] + ":")))   # 新門檻重新判斷
-    desc = lambda c: "、".join(f"{lab} {c[k]}{u}" for k, lab, u in RULES if k in c) or "不檢查"
+    desc = lambda c: "、".join(f"{lab} {c[k]}{u}" for k, lab, u in RULES + ACC_RULES if k in c) or "不檢查"
     alerts.event("info", f"檢討條件修改：{inst['name']}　{desc(old)} → {desc(new)}"
                  + ("（恢復設定檔）" if body is None else f"（觸發後：{'暫停進場' if new['action'] == 'pause' else '只通知'}）"),
                  inst["id"], notify=False)
     return new
 
 
+def _account_dd(instances, cfg):
+    """所有策略（含停用的）已平倉交易照出場時間合併，算美元的最大回撤"""
+    since = _since(cfg)
+    ev = []
+    for inst in instances:
+        for t in recon.live_trades(int(inst["magic"])):
+            if t["exit_ts"] is not None and t["entry_ts"] >= since:
+                ev.append((t["exit_ts"], t["profit"] + t["swap"] + t["commission"]))
+    ev.sort()
+    eq = peak = dd = 0.0
+    for _, v in ev:
+        eq += v; peak = max(peak, eq); dd = max(dd, peak - eq)
+    return {"n": len(ev), "net_money": round(eq, 2), "max_dd_money": round(dd, 2), "cur_dd_money": round(peak - eq, 2)}
+
+
 def status(instances):
     res = []
+    cfg, src = get_cfg(ACC)
+    if True:                                   # 帳戶合計永遠列出（可以從網頁設定）
+        configured = "max_dd_money" in cfg
+        m = _account_dd(instances, cfg) if configured else None
+        rules = []
+        if configured:
+            v, lim = m["max_dd_money"], cfg["max_dd_money"]
+            rules = [{"key": "max_dd_money", "label": "帳戶已實現回撤", "unit": " 美元", "limit": lim, "value": v,
+                      "hit": v > lim, "near": v <= lim and v >= lim * 0.8}]
+        res.append({**ACC, "configured": configured, "source": src, "cfg": cfg, "file_cfg": _file_cfg(ACC),
+                    "action": cfg.get("action", "pause"), "basis": cfg.get("basis", ""), "since": cfg.get("since"),
+                    "metrics": m, "rules": rules, "form": _form(ACC_ID)})
     for inst in instances:
         if not inst.get("enabled", True):
             continue
@@ -140,7 +191,7 @@ def status(instances):
         res.append({"id": inst["id"], "name": inst["name"], "magic": inst["magic"], "configured": configured, "source": src,
                     "cfg": cfg, "file_cfg": inst.get("review") or {}, "action": cfg.get("action", "pause"),
                     "basis": cfg.get("basis", ""), "since": cfg.get("since"), "metrics": m,
-                    "rules": evaluate(cfg, m) if configured else []})
+                    "rules": evaluate(cfg, m) if configured else [], "form": _form(inst["id"])})
     return res
 
 
@@ -149,7 +200,8 @@ def check(instances, now=None):
     now = int(now or time.time())
     hits = set(db.kv_get("review_hits", []) or [])
     fired = []
-    for r in status([i for i in instances if i.get("enabled", True)]):
+    enabled_ids = [i["id"] for i in instances if i.get("enabled", True)]
+    for r in status(instances):
         for rule in r["rules"]:
             k = f"{r['id']}:{rule['key']}"
             if not rule["hit"]:
@@ -164,9 +216,13 @@ def check(instances, now=None):
                    f"{cmp}事先訂的 {rule['limit']}{rule['unit']}。")
             if r["action"] == "pause":
                 paused = set(db.kv_get("paused", []) or [])
-                paused.add(r["id"])
+                if r["id"] == ACC_ID:
+                    paused.update(enabled_ids)
+                    msg += "已自動暫停「所有策略」進場（持倉照常出場）。"
+                else:
+                    paused.add(r["id"])
+                    msg += "已自動暫停進場（持倉照常出場）。"
                 db.kv_set("paused", sorted(paused))
-                msg += "已自動暫停進場（持倉照常出場）。"
             msg += "先查原因：行情型態變了、成交品質變差、還是程式問題；不要急著重新調參數。"
             if r["basis"]:
                 msg += f"\n依據：{r['basis']}"
