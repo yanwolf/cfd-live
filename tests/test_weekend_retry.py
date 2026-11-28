@@ -46,41 +46,40 @@ db.kv_set("ext:gold", {"received_at": T0, "position": None, "price": 3640.0})
 orig_desired = ext.desired
 ext.desired = lambda inst_id: {"received_at": now, "position": None, "price": 3640.0}
 
-# ---- 週末 48 小時，EA 每 2 秒同步一次；每筆送出去的都回 10018 休市（前 10 分鐘回 10031 斷線）
+# ---- 1) 券商連線中斷 2 小時（報價還在跳）：每筆回 10031 → 間隔 1、2、4、8、15 分鐘遞增重試
 now, sent, results = T0, [], []
-for step in range(48 * 3600 // 2):
+for step in range(2 * 3600 // 2):
     now = T0 + step * 2
-    resp = sync.handle(payload(now, [dict(POS)], results), now)
-    a = acts(resp)
+    a = acts(sync.handle(payload(now, [dict(POS)], results), now))
     sent += a
-    code = 10031 if now - T0 < 600 else 10018
-    results = [{"id": int(f[1]), "ok": False, "retcode": code, "msg": "x"} for f in a]
-
+    results = [{"id": int(f[1]), "ok": False, "retcode": 10031, "msg": "no connection"} for f in a]
 closes = [f for f in sent if f[2] == "CLOSE"]
 queued = db.q("SELECT COUNT(*) FROM actions WHERE status='queued' AND op='CLOSE'")[0][0]
-print("週末送出的平倉次數", len(closes), "排隊中", queued)
-assert queued <= 1, queued
-assert len(closes) < 48 * 4 + 20, len(closes)          # 間隔遞增到 15 分鐘：48 小時約 200 次以內（舊版會是幾十萬次）
-
-# 斷線警示只發一次（每 30 分鐘最多一次），不會每筆都推
+print("斷線 2 小時送出的平倉次數", len(closes), "排隊中", queued)
+assert queued <= 1 and len(closes) <= 14, (len(closes), queued)
 errs = db.q("SELECT COUNT(*) FROM events WHERE msg LIKE '%10031%'")[0][0]
-assert errs <= 2, errs
+assert errs <= 4, errs                                  # 每 30 分鐘最多提醒一次
 
-# ---- 報價停住（MT5 休市）時：外部訊號要平倉也先不送，只發一次提醒
+# ---- 2) 週末休市 48 小時（報價停住）：排隊的平倉留著不送，外部訊號也不再排新的
 TICK_T["t"] = now
 n = 0
-for k in range(1, 3000):
-    n += len([f for f in acts(sync.handle(payload(now + k * 2, [dict(POS)], []), now + k * 2)) if f[2] == "CLOSE"])
-assert n <= 1, n                      # 報價停住的前 5 分鐘內可能已經排了一筆
-db.ex("UPDATE actions SET status='expired' WHERE status='queued'")
-now += 6000
+for k in range(1, 48 * 3600 // 2):
+    t = now + k * 2
+    a = acts(sync.handle(payload(t, [dict(POS)], results), t))
+    results = [{"id": int(f[1]), "ok": False, "retcode": 10018, "msg": "Market closed"} for f in a]
+    n += len([f for f in a if f[2] == "CLOSE"])
+print("週末送出的平倉次數", n)
+assert n <= 6, n                      # 報價停住的前 5 分鐘還看不出休市，最多每分鐘試一次
+assert db.q("SELECT COUNT(*) FROM actions WHERE status='queued' AND op='CLOSE'")[0][0] == 1
+now += 48 * 3600
 TICK_T["t"] = None
-print("休市時不送平倉")
 
 # ---- 週一開盤：下一次送出就成交，之後不再送
-results = [{"id": int(f[1]), "ok": True, "retcode": 10009} for f in acts(sync.handle(payload(now + 900, [dict(POS)], []), now + 900))]
+first = acts(sync.handle(payload(now + 2, [dict(POS)], []), now + 2))
+assert [f[2] for f in first] == ["CLOSE"], first        # 開盤第一筆報價進來就送（不用等重試間隔）
+results = [{"id": int(f[1]), "ok": True, "retcode": 10009} for f in first]
 for k in range(1, 40):
-    a = acts(sync.handle(payload(now + 900 + k * 60, [], results), now + 900 + k * 60))
+    a = acts(sync.handle(payload(now + 2 + k * 60, [], results), now + 2 + k * 60))
     results = []
     assert not [f for f in a if f[2] == "CLOSE"], a
 print("開盤後平倉一次就結束")
@@ -98,7 +97,7 @@ for step in range(0, 3600, 2):
     results = [{"id": int(f[1]), "ok": False, "retcode": 10018} for f in a]
 left = db.q("SELECT COUNT(*) FROM actions WHERE status='queued' AND op='MARKET'")[0][0]
 print("進場單送出次數", n_sent, "還在排隊", left)
-assert left == 0 and n_sent <= 5, (n_sent, left)
+assert left == 0 and n_sent <= 16, (n_sent, left)        # 每分鐘試一次，15 分鐘後作廢
 
 # ---- 舊版堆出來的重複排隊（部署前就在 DB 裡）：部署後第一次同步就清掉
 for _ in range(50):

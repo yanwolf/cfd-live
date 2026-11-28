@@ -86,7 +86,9 @@ def ingest(p, now):
             if op == "MODIFY" and _queued(inst, "MODIFY", pl.get("ticket")):
                 continue                                         # 策略已經排了更新的修改
             pl.update(first_ts=first, tries=tries)
-            live.new_action(inst, op, pl, not_before=now + min(60 * 2 ** (tries - 1), RETRY_MAX_WAIT))   # 保留原 comment
+            # 休市：一分鐘後再排（送出前會先看報價，休市中不會真的送）；斷線：間隔遞增
+            wait = 60 if code == 10018 else min(60 * 2 ** (tries - 1), RETRY_MAX_WAIT)
+            live.new_action(inst, op, pl, not_before=now + wait)   # 保留原 comment
             if code == 10031:
                 _err_once(f"conn:{inst}", f"券商連線中斷（retcode=10031）：{op} {pl.get('symbol')} 會自動重試，"
                           f"請確認 MT5 右下角有連上伺服器", inst, every=1800)
@@ -236,6 +238,8 @@ def handle(p, now=None):
     rows = db.q("SELECT id, op, payload FROM actions WHERE status='queued' AND not_before<=? ORDER BY id", (now,))
     for aid, op, payload in rows:
         pl = json.loads(payload)
+        if ext._market_closed(snap, pl.get("symbol"), now):
+            continue                     # 休市（報價停住）：留在排隊，開盤第一筆報價進來就送，不去券商撞「Market closed」
         lines.append("A|" + "|".join(_fmt(x) for x in (aid, op, pl.get("symbol"), pl.get("magic"), pl.get("side", ""),
                                                         pl.get("volume", 0.0), pl.get("price", 0.0), pl.get("sl", 0.0),
                                                         pl.get("tp", 0.0), pl.get("ticket", 0), pl.get("comment", ""))))
