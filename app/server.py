@@ -142,6 +142,13 @@ def kill(body: dict):
     return {"ok": True}
 
 
+@app.get("/api/review")
+async def api_review():
+    """事先訂好的檢討條件：每支策略目前的數值、門檻、是否觸發"""
+    from . import review
+    return await run_in_threadpool(review.status, sync.config_instances())
+
+
 @app.post("/api/pause")
 def pause(body: dict):
     iid, on = body["id"], bool(body.get("on", True))
@@ -158,9 +165,15 @@ def pause(body: dict):
 
 # ------------------------------------------------------------------ 心跳監看
 def _watchdog():
+    from . import review
     alerted = False
     while True:
         time.sleep(30)
+        try:
+            if time.time() - (db.kv_get("review_at", 0) or 0) > 300:      # 每 5 分鐘檢查一次檢討條件
+                review.check(sync.config_instances())
+        except Exception as e:
+            print("review check failed:", e)
         try:
             last = db.kv_get("ea_last", 0) or 0
             if not last:

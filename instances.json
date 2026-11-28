@@ -59,7 +59,14 @@
     "magic": 100060,
     "tick_size": 0.1,
     "safety_units": 3.0,
-    "enabled": true
+    "enabled": true,
+    "review": {
+      "max_consec_loss": 18,
+      "min_pf50": 0.55,
+      "max_dd_pts": 2000,
+      "action": "pause",
+      "basis": "回測 Pepperstone 2018–2026（812 筆）：最多連虧 18 筆、50 筆 PF 最低 0.56、最大回撤 1,322 點；回撤門檻取 1.5 倍，指數價位變高後要跟著調"
+    }
   },
   {
     "id": "nas_gy24s",
@@ -128,6 +135,30 @@
     "tick_size": 0.1,
     "safety_units": 3.0,
     "enabled": false
+  },
+  {
+    "id": "gold_gy25_90",
+    "name": "黃金 GuYuan_2025 90 分",
+    "symbol": "XAUUSD",
+    "broker_symbol": "XAUUSD",
+    "strategy": "GuYuan_2025",
+    "minutes": 90,
+    "align": "session",
+    "params": {},
+    "lots": 0.01,
+    "contract_size": 100,
+    "magic": 900025,
+    "tick_size": 0.01,
+    "safety_units": 3.0,
+    "enabled": true,
+    "review": {
+      "max_consec_loss": 17,
+      "min_pf50": 0.45,
+      "max_dd_pts": 600,
+      "action": "pause",
+      "since": "2026-11-30",
+      "basis": "回測 Dukascopy 2018–2020＋2021–2026（599 筆）：最多連虧 17 筆、50 筆 PF 最低 0.44、最大回撤 390 點；回撤門檻取 1.5 倍"
+    }
   },
   {
     "id": "nas_arx",

@@ -59,6 +59,7 @@
       <span class="dimc" style="font-size:12.5px">起算</span><input id="pfstart" type="date" style="font:inherit;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:5px 8px">
       <button class="sec" id="pfbtn">重新整理</button></div>
     <div id="perf" style="margin-top:8px"><div class="dimc">載入中…</div></div>
+    <div id="review" style="margin-top:8px"></div>
   </div>
   <div class="panel"><h2>策略</h2><div id="insts"></div></div>
   <div class="panel">
@@ -206,7 +207,27 @@ async function loadPerf() {
       ${x.last.map(t => `<tr><td class="l">${d(t.entry_ts)}</td><td class="l">${d(t.exit_ts)}</td><td>${t.dir > 0 ? '<span class="up">多</span>' : '<span class="down">空</span>'}</td>
         <td>${t.vol}</td><td>${fmt(t.entry)}</td><td>${fmt(t.exit)}</td><td>${sgn(t.pts)}</td><td>${t.swap ? sgn(t.swap) : ""}</td><td>${sgn(t.money)}</td></tr>`).join("")}</table></div></details>`).join("")}`;
 }
-$("#pfbtn").onclick = loadPerf;
+async function loadReview() {
+  let R; try { R = await api("/api/review"); } catch (e) { return; }
+  if (!R.length) { $("#review").innerHTML = ""; return; }
+  const cell = r => {
+    const v = r.value === null || r.value === undefined ? "–" : fmt(r.value, r.key === "min_pf50" ? 2 : 0);
+    const cmp = r.key === "min_pf50" ? "＜" : "＞";
+    const cls = r.hit ? "up" : r.near ? "warn" : "";
+    return `<td class="${cls}">${v}${r.unit}<span class="dimc">　觸發 ${cmp}${fmt(r.limit, r.key === "min_pf50" ? 2 : 0)}${r.unit}</span>${r.hit ? "　已觸發" : r.near ? "　接近" : ""}</td>`;
+  };
+  $("#review").innerHTML = `<div class="inst"><div class="t"><b>檢討條件（事先訂好，超出回測最壞情況才觸發）</b></div>
+    <div class="scroll"><table><tr><th class="l">策略</th><th>已平倉</th><th>連續虧損</th><th>最近 50 筆 PF</th><th>最大回撤（點）</th><th class="l">觸發後</th></tr>
+    ${R.map(x => { const by = k => x.rules.find(r => r.key === k);
+      const td = k => by(k) ? cell(by(k)) : '<td class="dimc">–</td>';
+      return `<tr><td class="l">${esc(x.name)}</td><td>${x.metrics.n}</td>${td("max_consec_loss")}${td("min_pf50")}${td("max_dd_pts")}
+        <td class="l">${x.action === "pause" ? "暫停進場＋通知" : "只通知"}</td></tr>`; }).join("")}</table></div>
+    ${R.filter(x => x.basis).map(x => `<div class="dimc" style="font-size:12.5px;margin-top:4px">${esc(x.name)}：${esc(x.basis)}</div>`).join("")}
+    <div class="dimc" style="font-size:12.5px;margin-top:6px">觸發後先查原因（行情型態、成交品質、程式），不要急著重新調參數；確認沒問題可以在策略卡片按「恢復進場」。
+      最近 50 筆 PF 低於 1 在回測裡約兩到三成時間都會發生，是正常波動。</div></div>`;
+}
+$("#pfbtn").onclick = () => { loadPerf(); loadReview(); };
+loadReview(); setInterval(loadReview, 60000);
 $("#pfstart").onchange = loadPerf;
 loadPerf(); setInterval(loadPerf, 60000);
 
