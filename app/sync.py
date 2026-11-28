@@ -15,7 +15,9 @@ import numpy as np
 
 from . import alerts, config, db, ext, live, timeconv as T
 
-RETRY_CODES = {10018}          # TRADE_RETCODE_MARKET_CLOSED：休市中，一分鐘後再試
+RETRY_CODES = {10018, 10031}   # MARKET_CLOSED 休市、CONNECTION 券商連線中斷（剛搬 VPS、斷線）：退避重試
+ENTRY_TTL = 15 * 60            # 進場單從第一次送出算起超過 15 分鐘還沒成交就作廢，不在開盤跳空後追進
+RETRY_MAX_WAIT = 15 * 60       # 重試間隔 1、2、4、8、15、15… 分鐘
 OK_CODES = {10008, 10009, 10010}   # PLACED、DONE、DONE_PARTIAL
 
 
@@ -74,12 +76,72 @@ def ingest(p, now):
             continue
         pl = json.loads(payload)
         if code in RETRY_CODES and op in ("PENDING", "MODIFY", "MARKET", "CLOSE"):
-            live.new_action(inst, op, pl, not_before=now + 60)      # 保留原 comment，開倉後才對得回進場參考價
+            first = int(pl.get("first_ts") or _orig_created(pl, aid) or now)
+            tries = int(pl.get("tries") or 0) + 1
+            why = "休市" if code == 10018 else "券商連線中斷"
+            if op in ("MARKET", "PENDING") and now - first > ENTRY_TTL:
+                _err_once(f"ttl:{inst}", f"進場單作廢：{pl.get('symbol')} {pl.get('reason') or ''}"
+                          f"（{why}，已 {(now - first) // 60} 分鐘沒送成，不追）", inst, every=3600)
+                continue
+            if op == "MODIFY" and _queued(inst, "MODIFY", pl.get("ticket")):
+                continue                                         # 策略已經排了更新的修改
+            pl.update(first_ts=first, tries=tries)
+            live.new_action(inst, op, pl, not_before=now + min(60 * 2 ** (tries - 1), RETRY_MAX_WAIT))   # 保留原 comment
+            if code == 10031:
+                _err_once(f"conn:{inst}", f"券商連線中斷（retcode=10031）：{op} {pl.get('symbol')} 會自動重試，"
+                          f"請確認 MT5 右下角有連上伺服器", inst, every=1800)
             continue
         if op == "CANCEL" and code in (10013, 10036):     # 掛單已不存在（剛好成交或已撤）：不算錯
             continue
         alerts.event("error", f"動作失敗：{op} {pl.get('symbol')} retcode={code} {r.get('msg', '')}", inst)
     return snap
+
+
+def _orig_created(pl, aid):
+    """重試單沿用原 comment（L/X + 第一筆的 id），用它找回第一次排隊的時間"""
+    c = str(pl.get("comment") or "")
+    if c[:1] in ("L", "X") and c[1:].isdigit():
+        r = db.q("SELECT created FROM actions WHERE id=?", (int(c[1:]),))
+        if r:
+            return r[0][0]
+    r = db.q("SELECT created FROM actions WHERE id=?", (aid,))
+    return r[0][0] if r else None
+
+
+def _is_old_retry(pl, aid):
+    """部署前就排著的重試單：comment 是 L<第一筆 id>，且不是自己"""
+    c = str(pl.get("comment") or "")
+    return c[:1] == "L" and c[1:].isdigit() and int(c[1:]) != int(aid)
+
+
+def _queued(inst, op, ticket):
+    for (pl0,) in db.q("SELECT payload FROM actions WHERE inst=? AND op=? AND status='queued'", (inst, op)):
+        if int(json.loads(pl0).get("ticket") or 0) == int(ticket or 0):
+            return True
+    return False
+
+
+def tidy_queue(now):
+    """排隊中的動作整理（搬 VPS、週末休市後可能堆了很多）：
+    同一張單的 CLOSE／CANCEL 只留最早一筆；進場單超過 ENTRY_TTL 作廢"""
+    rows = db.q("SELECT id, inst, op, payload, created FROM actions WHERE status='queued' ORDER BY id")
+    seen, dropped = set(), 0
+    for aid, inst, op, payload, created in rows:
+        pl = json.loads(payload)
+        if op in ("CLOSE", "CANCEL") and pl.get("ticket"):
+            k = (inst, op, int(pl["ticket"]))
+            if k in seen:
+                db.ex("UPDATE actions SET status='expired' WHERE id=?", (aid,)); dropped += 1
+                continue
+            seen.add(k)
+        elif op in ("MARKET", "PENDING") and (pl.get("first_ts") or _is_old_retry(pl, aid)):
+            # 只管「重試中」的進場單（有 first_ts，或 comment 指向更早的第一筆）；剛排的新單照常送
+            first = int(pl.get("first_ts") or _orig_created(pl, aid) or created)
+            if now - first > ENTRY_TTL:
+                db.ex("UPDATE actions SET status='expired' WHERE id=?", (aid,)); dropped += 1
+                _err_once(f"ttl:{inst}", f"進場單作廢：{pl.get('symbol')} {pl.get('reason') or ''}"
+                          f"（排隊 {(now - first) // 60} 分鐘沒送成，不追）", inst, every=3600)
+    return dropped
 
 
 def checks(snap, now, instances):
@@ -170,6 +232,7 @@ def handle(p, now=None):
         days = 2 if sym in ext_only else config.BACKFILL_DAYS      # 外部訊號只要報價，不用回補 60 天 K 棒
         since = T.utc2srv(last) if last else T.utc2srv(now - days * 86400)
         lines.append(f"S|{sym}|{since}")
+    tidy_queue(now)
     rows = db.q("SELECT id, op, payload FROM actions WHERE status='queued' AND not_before<=? ORDER BY id", (now,))
     for aid, op, payload in rows:
         pl = json.loads(payload)

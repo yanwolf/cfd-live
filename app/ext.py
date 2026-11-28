@@ -21,7 +21,7 @@ import json
 import time
 from datetime import datetime
 
-from . import alerts, db
+from . import alerts, db, timeconv as T
 
 DONE_KEEP = 300
 
@@ -95,6 +95,15 @@ def _tick(snap, sym):
     t = (snap.get("ticks") or {}).get(sym) or {}
     bid, ask = t.get("bid"), t.get("ask")
     return (float(bid), float(ask)) if bid and ask else (None, None)
+
+
+def _market_closed(snap, sym, now, max_age=300):
+    """MT5 這個商品超過 5 分鐘沒有新報價 = 休市（週末、每日休盤）。
+    外部訊號來自幣安 XAUUSDT（24/7），週末也會換倉；這時候送單只會一直回「休市」，所以先不送，開盤再做"""
+    t = (snap.get("ticks") or {}).get(sym) or {}
+    if not t.get("time"):
+        return False
+    return now - T.srv2utc(int(t["time"])) > max_age
 
 
 def _mark_done(st, key):
@@ -212,6 +221,13 @@ def process(inst, now, snap, paused=False):
 
     # ---- 有持倉：對方已經空手或換了一筆 → 平倉
     if pos:
+        if tgt_key != st.get("open_key") and _market_closed(snap, sym, now):
+            if not st.get("closed_hold"):
+                alerts.event("warn", f"{inst['name']}：對方已平倉，但 MT5 {sym} 休市中，開盤後再平倉", inst["id"])
+                st["closed_hold"] = now
+            _set_state(inst["id"], st)
+            return n_new
+        st.pop("closed_hold", None)
         if tgt_key != st.get("open_key"):
             cl = st.get("closing") or {}
             if cl.get("ticket") != pos["ticket"] or now - int(cl.get("at") or 0) > 120:
@@ -243,11 +259,12 @@ def process(inst, now, snap, paused=False):
               "sim_sl_points": tgt.get("sl_points"), "entry_reason": tgt.get("reason")}
         block = paused or bool(st.get("paused_reason"))
         late = now - sig_ts > int(inst.get("max_entry_delay_sec", 300))
-        if block or late:
-            tr.update({"status": "skipped", "skip": "暫停進場" if block else f"收到時已過 {now - sig_ts} 秒，不追"})
+        shut = _market_closed(snap, sym, now)
+        if block or late or shut:
+            tr.update({"status": "skipped", "skip": "暫停進場" if block else ("MT5 休市" if shut else f"收到時已過 {now - sig_ts} 秒，不追")})
             trade_put(inst["id"], tgt_key, tr)
             _mark_done(st, tgt_key)
-            if late and not block:
+            if late and not block and not shut:
                 alerts.event("warn", f"{inst['name']}：訊號 {tgt_key} 收到時已過 {now - sig_ts} 秒，不追", inst["id"])
             _set_state(inst["id"], st)
             return n_new

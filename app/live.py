@@ -130,6 +130,11 @@ def set_state(inst_id, st):
 
 
 def new_action(inst_id, op, payload, not_before=0):
+    # 同一張單的平倉／撤單已經在排隊（例如休市重試中）就不再排第二筆：避免週末堆出幾百筆、開盤時一起送
+    if op in ("CLOSE", "CANCEL") and payload.get("ticket"):
+        for aid0, pl0 in db.q("SELECT id, payload FROM actions WHERE inst=? AND op=? AND status='queued'", (inst_id, op)):
+            if int(json.loads(pl0).get("ticket") or 0) == int(payload["ticket"]):
+                return aid0
     aid = db.ex("INSERT INTO actions(inst, op, payload, status, created, not_before) VALUES (?,?,?,?,?,?)",
                 (inst_id, op, "{}", "queued", int(time.time()), int(not_before)))
     payload = dict(payload)
