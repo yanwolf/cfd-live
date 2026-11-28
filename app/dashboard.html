@@ -13,6 +13,15 @@
   header{display:flex;align-items:center;gap:10px;padding:14px 14px 8px;flex-wrap:wrap}
   header h1{font-size:19px;margin:0;font-weight:650}
   main{padding:4px 12px 40px;max-width:1100px;margin:0 auto}
+  nav.tabs{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;gap:4px;overflow-x:auto;padding:6px 12px;border-bottom:1px solid var(--line);max-width:1100px;margin:0 auto}
+  nav.tabs button{background:none;border:none;color:var(--dim);font:inherit;font-size:14.5px;padding:8px 12px;border-bottom:2px solid transparent;white-space:nowrap;cursor:pointer;border-radius:0}
+  nav.tabs button.on{color:var(--ink);border-bottom-color:var(--gold)}
+  nav.tabs .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:9px;background:var(--up);color:#fff;font-size:11.5px;line-height:18px;text-align:center}
+  [data-tab]{display:none} [data-tab].show{display:block}
+  .rv input,.rv select{font:inherit;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 6px;width:100%;box-sizing:border-box}
+  .rv label{display:block;font-size:12px;color:var(--dim);margin-bottom:3px}
+  .rvgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:8px}
+  .evf button{font-size:12.5px;padding:4px 10px} .evf button.on{border-color:var(--gold);color:var(--gold)}
   .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
   .panel h2{font-size:15px;margin:0 0 10px;font-weight:600}
   .badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12.5px;border:1px solid var(--gold);color:var(--gold)}
@@ -51,31 +60,37 @@
   <span style="flex:1"></span>
   <button id="killbtn" class="kill">緊急停止</button>
 </header>
+<nav class="tabs" id="tabs">
+  <button data-tabgo="home">總覽</button><button data-tabgo="perf">績效與檢討</button><button data-tabgo="recon">對帳</button>
+  <button data-tabgo="events">事件<span class="cnt" id="evcnt" style="display:none"></span></button><button data-tabgo="logs">成交與動作</button>
+</nav>
 <main>
-  <div class="panel"><div class="grid" id="acct"></div></div>
-  <div class="panel"><h2>目前持倉</h2><div id="possum"></div></div>
-  <div class="panel">
+  <div class="panel" data-tab="home"><div class="grid" id="acct"></div></div>
+  <div class="panel" data-tab="home"><h2>目前持倉</h2><div id="possum"></div></div>
+  <div class="panel" data-tab="perf">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">績效統計</h2><span style="flex:1"></span>
       <span class="dimc" style="font-size:12.5px">起算</span><input id="pfstart" type="date" style="font:inherit;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:5px 8px">
       <button class="sec" id="pfbtn">重新整理</button></div>
     <div id="perf" style="margin-top:8px"><div class="dimc">載入中…</div></div>
-    <div id="review" style="margin-top:8px"></div>
   </div>
-  <div class="panel"><h2>策略</h2><div id="insts"></div></div>
-  <div class="panel">
+  <div class="panel" data-tab="perf"><h2>檢討條件</h2><div id="review"></div></div>
+  <div class="panel" data-tab="home"><h2>策略</h2><div id="insts"></div></div>
+  <div class="panel" data-tab="recon">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">實盤 vs 回測</h2><span style="flex:1"></span>
       <button class="sec" id="reconbtn">計算對帳</button><button class="sec" id="reconcsv" style="display:none">下載 CSV</button></div>
     <p class="dimc" style="font-size:12.5px;margin:6px 0 0">用同一份 1 分 K、同一支策略，從每支策略開始跑的時間起重跑回測，跟券商成交逐筆比。
       滑價已扣掉點差（點差用商品預設值，單筆會有幾點誤差，看平均）；正數 = 比回測差。</p>
     <div id="recon"></div>
   </div>
-  <div class="panel" id="extpanel" style="display:none"><h2>外部訊號：模擬 vs MT5</h2>
+  <div class="panel" id="extpanel" data-tab="recon" data-hide="1"><h2>外部訊號：模擬 vs MT5</h2>
     <p class="dimc" style="font-size:12.5px;margin:6px 0 0">策略在別的服務跑（例如 gold-scalper），這裡照著在 MT5 下單，量點差、滑價、延遲。
       滑價：成交價比下單當下的報價差多少（正數＝比較差）。報價差：券商中價 − 對方的幣安價。模擬帳戶的成交通常比真實帳戶理想。</p>
     <div id="ext"></div></div>
-  <div class="panel"><h2>事件</h2><div id="events"></div></div>
-  <div class="panel"><h2>最近成交（券商）</h2><div class="scroll"><table id="deals"></table></div></div>
-  <div class="panel"><h2>最近送出的動作</h2><div class="scroll"><table id="acts"></table></div></div>
+  <div class="panel" data-tab="events"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">事件</h2><span style="flex:1"></span>
+    <span class="evf" id="evf"><button class="sec" data-lv="">全部</button> <button class="sec" data-lv="bad">錯誤／警示</button> <button class="sec" data-lv="trade">交易</button></span></div>
+    <div id="events" style="margin-top:8px"></div></div>
+  <div class="panel" data-tab="logs"><h2>最近成交（券商）</h2><div class="scroll"><table id="deals"></table></div></div>
+  <div class="panel" data-tab="logs"><h2>最近送出的動作</h2><div class="scroll"><table id="acts"></table></div></div>
 </main>
 <script>
 const $ = s => document.querySelector(s);
@@ -127,7 +142,7 @@ async function load() {
       + (held.length > 1 ? `<div class="ps" style="cursor:default"><span class="dimc">合計浮動</span><span style="flex:1"></span>${sgn(tot)}</div>` : "")
     : '<div class="dimc" style="padding:4px 0">目前沒有任何持倉</div>')
     + (idle.length ? `<div class="dimc" style="font-size:12.5px;margin-top:8px">無持倉：${idle.map(i => esc(i.name)).join("、")}</div>` : "");
-  document.querySelectorAll("[data-go]").forEach(r => r.onclick = () => document.getElementById("inst-" + r.dataset.go).scrollIntoView({behavior: "smooth", block: "start"}));
+  document.querySelectorAll("#possum [data-go]").forEach(r => r.onclick = () => { const el = document.getElementById("inst-" + r.dataset.go); if (el) el.scrollIntoView({behavior: "smooth", block: "start"}); });
   $("#insts").innerHTML = s.instances.map(i => {
     const p = i.positions[0];
     const state = !i.enabled ? '<span class="badge dim">停用</span>' : i.paused_reason ? `<span class="badge bad">暫停：${esc(i.paused_reason)}</span>`
@@ -148,7 +163,7 @@ async function load() {
       </div></div>`;
   }).join("");
   document.querySelectorAll("button[data-p]").forEach(b => b.onclick = async () => { await api("/api/pause", {id: b.dataset.p, on: b.dataset.on === "1"}); load(); });
-  $("#events").innerHTML = s.events.map(e => `<div class="ev ${e.level}">${tstr(e.ts)}　${esc(e.msg)}</div>`).join("") || '<div class="dimc">尚無事件</div>';
+  EVENTS = s.events; renderEvents();
   $("#deals").innerHTML = `<tr><th class="l">時間</th><th class="l">商品</th><th>方向</th><th>開／平</th><th>手數</th><th>價格</th><th>損益</th><th>利息</th><th>magic</th></tr>` +
     s.deals.map(d => `<tr><td class="l">${tstr(d.time_utc)}</td><td class="l">${esc(d.symbol)}</td><td>${d.type === 0 ? "買" : "賣"}</td><td>${d.entry === 0 ? "開" : "平"}</td>
       <td>${d.volume}</td><td>${fmt(d.price)}</td><td>${d.entry === 0 ? "" : sgn(d.profit)}</td><td>${d.swap ? sgn(d.swap) : ""}</td><td>${d.magic}</td></tr>`).join("");
@@ -207,24 +222,91 @@ async function loadPerf() {
       ${x.last.map(t => `<tr><td class="l">${d(t.entry_ts)}</td><td class="l">${d(t.exit_ts)}</td><td>${t.dir > 0 ? '<span class="up">多</span>' : '<span class="down">空</span>'}</td>
         <td>${t.vol}</td><td>${fmt(t.entry)}</td><td>${fmt(t.exit)}</td><td>${sgn(t.pts)}</td><td>${t.swap ? sgn(t.swap) : ""}</td><td>${sgn(t.money)}</td></tr>`).join("")}</table></div></details>`).join("")}`;
 }
+// ---------------------------------------------------------------- 分頁
+const TABS = ["home", "perf", "recon", "events", "logs"];
+function showTab(t) {
+  if (!TABS.includes(t)) t = "home";
+  document.querySelectorAll("[data-tab]").forEach(el => el.classList.toggle("show", el.dataset.tab === t));
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tabgo === t));
+  try { localStorage.setItem("cfdtab", t); } catch (e) {}
+  if (location.hash !== "#" + t) history.replaceState(null, "", "#" + t);
+  if (t === "events") { try { localStorage.setItem("evseen", String(Math.floor(Date.now() / 1000))); } catch (e) {} renderEvents(); }
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tabgo));
+
+// ---------------------------------------------------------------- 事件（篩選、未讀的錯誤／警示數）
+let EVENTS = [], EVF = "";
+function renderEvents() {
+  const bad = e => e.level === "error" || e.level === "warn";
+  const list = EVENTS.filter(e => !EVF || (EVF === "bad" ? bad(e) : e.level === EVF));
+  $("#events").innerHTML = list.map(e => `<div class="ev ${e.level}">${tstr(e.ts)}　${esc(e.msg)}</div>`).join("") || '<div class="dimc">沒有符合的事件</div>';
+  document.querySelectorAll("#evf button").forEach(b => b.classList.toggle("on", b.dataset.lv === EVF));
+  let seen = 0; try { seen = +(localStorage.getItem("evseen") || 0); } catch (e) {}
+  const onEv = document.querySelector('#tabs button[data-tabgo="events"]').classList.contains("on");
+  const n = onEv ? 0 : EVENTS.filter(e => bad(e) && e.ts > seen).length;
+  $("#evcnt").style.display = n ? "" : "none"; $("#evcnt").textContent = n;
+}
+document.querySelectorAll("#evf button").forEach(b => b.onclick = () => { EVF = b.dataset.lv; renderEvents(); });
+let _t0 = location.hash.slice(1); if (!TABS.includes(_t0)) { try { _t0 = localStorage.getItem("cfdtab"); } catch (e) {} }
+showTab(_t0 || "home");
+
+// ---------------------------------------------------------------- 檢討條件（可在網頁修改）
+let REVIEW = [];
 async function loadReview() {
-  let R; try { R = await api("/api/review"); } catch (e) { return; }
-  if (!R.length) { $("#review").innerHTML = ""; return; }
+  try { REVIEW = await api("/api/review"); } catch (e) { $("#review").innerHTML = `<div class="up">${esc(e.message)}</div>`; return; }
+  if (document.querySelector("#review .rv.editing")) return;          // 正在編輯就不要刷新蓋掉
+  const dg = k => k === "min_pf50" ? 2 : 0;
   const cell = r => {
-    const v = r.value === null || r.value === undefined ? "–" : fmt(r.value, r.key === "min_pf50" ? 2 : 0);
-    const cmp = r.key === "min_pf50" ? "＜" : "＞";
+    const v = r.value === null || r.value === undefined ? "–" : fmt(r.value, dg(r.key));
     const cls = r.hit ? "up" : r.near ? "warn" : "";
-    return `<td class="${cls}">${v}${r.unit}<span class="dimc">　觸發 ${cmp}${fmt(r.limit, r.key === "min_pf50" ? 2 : 0)}${r.unit}</span>${r.hit ? "　已觸發" : r.near ? "　接近" : ""}</td>`;
+    return `<span class="${cls}">${v}${r.unit}</span><span class="dimc">／${r.key === "min_pf50" ? "＜" : "＞"}${fmt(r.limit, dg(r.key))}${r.unit}${r.hit ? "　已觸發" : r.near ? "　接近" : ""}</span>`;
   };
-  $("#review").innerHTML = `<div class="inst"><div class="t"><b>檢討條件（事先訂好，超出回測最壞情況才觸發）</b></div>
-    <div class="scroll"><table><tr><th class="l">策略</th><th>已平倉</th><th>連續虧損</th><th>最近 50 筆 PF</th><th>最大回撤（點）</th><th class="l">觸發後</th></tr>
-    ${R.map(x => { const by = k => x.rules.find(r => r.key === k);
-      const td = k => by(k) ? cell(by(k)) : '<td class="dimc">–</td>';
-      return `<tr><td class="l">${esc(x.name)}</td><td>${x.metrics.n}</td>${td("max_consec_loss")}${td("min_pf50")}${td("max_dd_pts")}
-        <td class="l">${x.action === "pause" ? "暫停進場＋通知" : "只通知"}</td></tr>`; }).join("")}</table></div>
-    ${R.filter(x => x.basis).map(x => `<div class="dimc" style="font-size:12.5px;margin-top:4px">${esc(x.name)}：${esc(x.basis)}</div>`).join("")}
-    <div class="dimc" style="font-size:12.5px;margin-top:6px">觸發後先查原因（行情型態、成交品質、程式），不要急著重新調參數；確認沒問題可以在策略卡片按「恢復進場」。
-      最近 50 筆 PF 低於 1 在回測裡約兩到三成時間都會發生，是正常波動。</div></div>`;
+  $("#review").innerHTML = REVIEW.map(x => {
+    const by = k => x.rules.find(r => r.key === k), c = x.cfg || {};
+    const val = k => c[k] === undefined || c[k] === null ? "" : c[k];
+    const summary = x.configured ? `<div class="grid" style="margin-top:6px">
+        <div><div class="k">已平倉${x.since ? `（${esc(x.since)} 起）` : ""}</div><div class="v">${x.metrics.n}</div></div>
+        <div><div class="k">連續虧損</div><div class="v" style="font-size:15px">${by("max_consec_loss") ? cell(by("max_consec_loss")) : "–"}</div></div>
+        <div><div class="k">最近 50 筆 PF</div><div class="v" style="font-size:15px">${by("min_pf50") ? cell(by("min_pf50")) : "–"}</div></div>
+        <div><div class="k">最大回撤（點）</div><div class="v" style="font-size:15px">${by("max_dd_pts") ? cell(by("max_dd_pts")) : "–"}</div></div>
+        <div><div class="k">觸發後</div><div class="v" style="font-size:15px">${x.action === "pause" ? "暫停進場＋通知" : "只通知"}</div></div></div>`
+      : '<div class="dimc" style="margin-top:4px">未設定（不檢查）</div>';
+    return `<div class="inst rv" data-id="${esc(x.id)}"><div class="t"><b class="gold">${esc(x.name)}</b>
+        <span class="dimc" style="font-size:12px">${x.source === "網頁" ? "網頁修改過" : (x.configured ? "設定檔" : "")}</span>
+        <span style="flex:1"></span><button class="sec rvedit">修改</button></div>
+      ${summary}${x.basis ? `<div class="dimc" style="font-size:12.5px;margin-top:6px">依據：${esc(x.basis)}</div>` : ""}
+      <div class="rvform" style="display:none">
+        <div class="rvgrid">
+          <div><label>連續虧損超過（筆）</label><input name="max_consec_loss" type="number" min="1" step="1" value="${val("max_consec_loss")}" placeholder="空白＝不檢查"></div>
+          <div><label>最近 50 筆 PF 低於</label><input name="min_pf50" type="number" min="0.01" step="0.01" value="${val("min_pf50")}" placeholder="空白＝不檢查"></div>
+          <div><label>最大回撤超過（點）</label><input name="max_dd_pts" type="number" min="1" step="1" value="${val("max_dd_pts")}" placeholder="空白＝不檢查"></div>
+          <div><label>觸發後</label><select name="action"><option value="pause"${x.action === "pause" ? " selected" : ""}>暫停進場＋通知</option><option value="alert"${x.action === "alert" ? " selected" : ""}>只通知</option></select></div>
+          <div><label>從哪天的進場開始算</label><input name="since" type="date" value="${val("since")}"></div>
+        </div>
+        <div style="margin-top:8px"><label style="font-size:12px;color:var(--dim)">依據（為什麼訂這個數字，觸發時會一起通知）</label><input name="basis" value="${esc(val("basis"))}"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button class="rvsave">儲存</button><button class="sec rvcancel">取消</button>
+          ${x.source === "網頁" ? '<button class="sec rvreset">恢復設定檔</button>' : ""}<span class="dimc rvmsg" style="font-size:12.5px;align-self:center"></span></div>
+      </div></div>`;
+  }).join("") + `<div class="dimc" style="font-size:12.5px;margin-top:6px">超出回測看過的最壞情況才觸發。觸發後先查原因（行情型態、成交品質、程式），不要急著重新調參數；
+    確認沒問題可以在策略卡片按「恢復進場」。最近 50 筆 PF 低於 1 在回測裡約兩到三成時間都會發生，是正常波動。每次修改都會記在「事件」。</div>`;
+  document.querySelectorAll("#review .rv").forEach(card => {
+    const form = card.querySelector(".rvform"), id = card.dataset.id;
+    const close = () => { form.style.display = "none"; card.classList.remove("editing"); };
+    card.querySelector(".rvedit").onclick = () => { form.style.display = ""; card.classList.add("editing"); };
+    card.querySelector(".rvcancel").onclick = () => { close(); loadReview(); };
+    const send = async cfg => {
+      const msg = card.querySelector(".rvmsg"); msg.textContent = "儲存中…";
+      try { await api("/api/review", {id, cfg}); close(); loadReview(); }
+      catch (e) { msg.textContent = e.message; }
+    };
+    card.querySelector(".rvsave").onclick = () => {
+      const cfg = {}; form.querySelectorAll("input,select").forEach(el => cfg[el.name] = el.value.trim());
+      if (!confirm("儲存新的檢討條件？會記一筆事件，並用新門檻重新判斷。")) return;
+      send(cfg);
+    };
+    const rs = card.querySelector(".rvreset"); if (rs) rs.onclick = () => { if (confirm("恢復成 instances.json 的設定？")) send(null); };
+  });
 }
 $("#pfbtn").onclick = () => { loadPerf(); loadReview(); };
 loadReview(); setInterval(loadReview, 60000);

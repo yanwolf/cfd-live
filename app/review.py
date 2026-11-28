@@ -9,6 +9,7 @@ instances.json 每支策略可以加：
     "since": "2026-11-28",     從哪天的進場開始算（省略 = 這支策略的全部紀錄）
     "basis": "回測 …"          訂這組門檻的依據，提醒時一起顯示，免得到時候忘記為什麼
   }
+網頁上也可以改（存在資料庫，優先於 instances.json；按「恢復設定檔」回到 instances.json 的值），每次修改都記一筆事件。
 規則的精神：條件是事前訂的、觸發是自動的；觸發後先停下來看原因，不是馬上重新調參數。
 同一條觸發後只提醒一次；條件解除（例如連虧被一筆獲利打斷）後才會重新計算。
 手動按「恢復進場」可以覆蓋，之後同一條件不會再自動暫停，直到它解除再觸發。
@@ -81,15 +82,65 @@ def _trades(inst, cfg):
     return rows
 
 
+FIELDS = {"max_consec_loss": int, "min_pf50": float, "max_dd_pts": float}
+
+
+def get_cfg(inst):
+    """網頁改過的優先，否則用 instances.json 的 review"""
+    ov = (db.kv_get("review_cfg", {}) or {}).get(inst["id"])
+    if ov is not None:
+        return ov, "網頁"
+    return inst.get("review") or {}, "設定檔"
+
+
+def set_cfg(inst, body):
+    """body = None → 恢復設定檔；否則 {max_consec_loss, min_pf50, max_dd_pts, action, since, basis}，空白欄位 = 不檢查"""
+    allc = db.kv_get("review_cfg", {}) or {}
+    old, _ = get_cfg(inst)
+    if body is None:
+        allc.pop(inst["id"], None)
+        new = inst.get("review") or {}
+    else:
+        new = {}
+        for k, typ in FIELDS.items():
+            v = body.get(k)
+            if v in (None, ""):
+                continue
+            v = typ(v)
+            if v <= 0:
+                raise ValueError(f"{k} 要大於 0")
+            new[k] = v
+        act = body.get("action") or "pause"
+        if act not in ("pause", "alert"):
+            raise ValueError("action 只能是 pause 或 alert")
+        new["action"] = act
+        if body.get("since"):
+            datetime.strptime(str(body["since"]), "%Y-%m-%d")
+            new["since"] = str(body["since"])
+        new["basis"] = str(body.get("basis") or old.get("basis") or "")[:300]
+        allc[inst["id"]] = new
+    db.kv_set("review_cfg", allc)
+    hits = set(db.kv_get("review_hits", []) or [])
+    db.kv_set("review_hits", sorted(h for h in hits if not h.startswith(inst["id"] + ":")))   # 新門檻重新判斷
+    desc = lambda c: "、".join(f"{lab} {c[k]}{u}" for k, lab, u in RULES if k in c) or "不檢查"
+    alerts.event("info", f"檢討條件修改：{inst['name']}　{desc(old)} → {desc(new)}"
+                 + ("（恢復設定檔）" if body is None else f"（觸發後：{'暫停進場' if new['action'] == 'pause' else '只通知'}）"),
+                 inst["id"], notify=False)
+    return new
+
+
 def status(instances):
     res = []
     for inst in instances:
-        cfg = inst.get("review")
-        if not cfg:
+        if not inst.get("enabled", True):
             continue
-        m = metrics(_trades(inst, cfg))
-        res.append({"id": inst["id"], "name": inst["name"], "magic": inst["magic"], "action": cfg.get("action", "pause"),
-                    "basis": cfg.get("basis", ""), "since": cfg.get("since"), "metrics": m, "rules": evaluate(cfg, m)})
+        cfg, src = get_cfg(inst)
+        configured = any(k in cfg for k in FIELDS)
+        m = metrics(_trades(inst, cfg)) if configured else None
+        res.append({"id": inst["id"], "name": inst["name"], "magic": inst["magic"], "configured": configured, "source": src,
+                    "cfg": cfg, "file_cfg": inst.get("review") or {}, "action": cfg.get("action", "pause"),
+                    "basis": cfg.get("basis", ""), "since": cfg.get("since"), "metrics": m,
+                    "rules": evaluate(cfg, m) if configured else []})
     return res
 
 

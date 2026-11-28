@@ -149,6 +149,19 @@ async def api_review():
     return await run_in_threadpool(review.status, sync.config_instances())
 
 
+@app.post("/api/review")
+def api_review_set(body: dict):
+    """網頁修改檢討條件：{id, cfg}；cfg = null → 恢復 instances.json 的設定"""
+    from . import review
+    inst = next((i for i in sync.config_instances() if i["id"] == body.get("id")), None)
+    if not inst:
+        return Response("找不到這支策略", status_code=404)
+    try:
+        return {"ok": True, "cfg": review.set_cfg(inst, body.get("cfg"))}
+    except (ValueError, TypeError) as e:
+        return Response(f"格式錯誤：{e}", status_code=400)
+
+
 @app.post("/api/pause")
 def pause(body: dict):
     iid, on = body["id"], bool(body.get("on", True))
